@@ -12,7 +12,7 @@ bt = ctx.mk_boolean_type()
 a = ctx.mk_input('a', bt)
 """
 
-from intrepyd.api import mk_assumption, mk_undef, mk_true, mk_false,\
+from intrepyd.api import mk_assumption, mk_undef, mk_true, mk_false, pop_assumption, push_assumption,\
                          push_namespace, pop_namespace,\
                          mk_boolean_type, mk_real_type,\
                          mk_int8_type, mk_int16_type, mk_int32_type, mk_int64_type,\
@@ -336,8 +336,21 @@ class Context:
     def mk_assumption(self, net):
         """
         Creates an assumption
+        @deprecated
         """
         mk_assumption(self.ctx, net)
+
+    def push_assumption(self, net):
+        """
+        Pushes an assumption
+        """
+        push_assumption(self.ctx, net)
+
+    def pop_assumption(self):
+        """
+        Pops an assumption
+        """
+        pop_assumption(self.ctx)
 
     def mk_cast_to_int8(self, net, name=None):
         """

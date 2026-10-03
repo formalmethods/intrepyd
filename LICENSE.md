@@ -1,6 +1,12 @@
+This license covers intrepyd, the contents of this repository. It does not
+cover the intrepid library (libintrepid.so, libintrepid.dylib, intrepid.dll)
+that the intrepyd wheels bundle: that is proprietary software, distributed
+under its own license, which is installed next to it as
+intrepyd/LICENSE.intrepid and allows it to be used freely as part of intrepyd.
+
 BSD 3-Clause License
 
-Copyright (c) 2016, Roberto Bruttomesso
+Copyright (c) 2016-2021, Roberto Bruttomesso
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without

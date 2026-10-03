@@ -1,0 +1,52 @@
+AWS_ACCOUNT=338902401816.dkr.ecr.eu-central-1.amazonaws.com
+VERSION=`cat VERSION`
+
+all: docker_push_aws docker_push_hub
+
+# The image bundles the linux library: fetch it first
+docker_build:
+	@$(MAKE) --no-print-directory fetch_intrepid PLATFORM=linux-x86_64
+	@echo "# Building docker image"
+	@docker build -t intrepid:latest .
+	@docker tag intrepid:latest intrepid:$(VERSION)
+
+docker_prune:
+	@docker container prune -f
+
+docker_run: docker_prune
+	@echo "# Runnig docker container from image"
+	@docker run -p 8000:8000 --name=intrepid -d intrepid:latest
+
+docker_push_hub: docker_build
+	@echo "# Pushing docker image to hub"
+	@docker login --username=robertobruttomesso
+	@docker tag intrepid:latest robertobruttomesso/intrepid:latest
+	@docker tag intrepid:latest robertobruttomesso/intrepid:$(VERSION)
+	@docker push robertobruttomesso/intrepid
+	@docker push robertobruttomesso/intrepid:$(VERSION)
+
+docker_push_gitlab: docker_build
+	@echo "# Pushing docker image to gitlab"
+	@docker login registry.gitlab.com -u roberto.bruttomesso
+	@docker tag intrepid:latest registry.gitlab.com/roberto.bruttomesso/intrepyd:latest
+	@docker tag intrepid:latest registry.gitlab.com/roberto.bruttomesso/intrepyd:$(VERSION)
+	@docker push registry.gitlab.com/roberto.bruttomesso/intrepyd
+	@docker push registry.gitlab.com/roberto.bruttomesso/intrepyd:$(VERSION)
+
+docker_push_heroku: docker_build
+	@echo "# Pushing docker image to heroku"
+	@heroku login
+	@heroku container:login
+	@docker tag intrepid:latest registry.heroku.com/formalmethods/web:latest
+	@docker tag intrepid:latest registry.heroku.com/formalmethods/web:$(VERSION)
+	@docker push registry.heroku.com/formalmethods/web
+	@docker push registry.heroku.com/formalmethods/web:$(VERSION)
+	@heroku container:release web
+
+docker_push_aws: docker_build
+	@echo "# Pushing docker image to aws"
+	@aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 338902401816.dkr.ecr.eu-central-1.amazonaws.com
+	@docker tag intrepid:latest $(AWS_ACCOUNT)/intrepid:latest
+	@docker tag intrepid:latest $(AWS_ACCOUNT)/intrepid:$(VERSION)
+	@docker push $(AWS_ACCOUNT)/intrepid
+	@docker push $(AWS_ACCOUNT)/intrepid:$(VERSION)

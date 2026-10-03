@@ -116,6 +116,26 @@ class TestBmc(unittest.TestCase):
         result = bmc_ti.reach_targets()
         self.assertEqual(EngineResult.UNKNOWN, result)
 
+    def test_bmc_07(self):
+        context = intrepyd.Context()
+        bt = context.mk_boolean_type()
+        x = context.mk_input("x", bt)
+        y = context.mk_input("y", bt)
+        gate = context.mk_and(context.mk_not(x), y)
+        context.mk_output(gate)
+        context.push_assumption(x)
+        bmc = context.mk_bmc()
+        bmc.add_target(gate)
+        bmc.set_current_depth(0)
+        result = bmc.reach_targets()
+        self.assertEqual(EngineResult.UNKNOWN, result)
+        context.pop_assumption()
+        bmc = context.mk_bmc()
+        bmc.add_target(gate)
+        bmc.set_current_depth(0)
+        result = bmc.reach_targets()
+        self.assertEqual(EngineResult.REACHABLE, result)
+
     def test_bmc_ti_01(self):
         context = intrepyd.Context()
         bt = context.mk_boolean_type()

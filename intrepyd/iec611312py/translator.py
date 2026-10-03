@@ -29,16 +29,16 @@ def translate(filename, outfilename):
     pous = parse_plc_open_file(filename)
     print('... done')
     flush()
-    outfile = open(outfilename, 'w')
-    top_level = True
-    for pou in pous:
-        name2var = {var.name: var for var in pou.input_vars +
-                    pou.local_vars + pou.output_vars}
-        if top_level:
-            _dump_header(pou, name2var, filename, outfile)
-        _translate_pou(pou, name2var, outfile)
-        top_level = False
-    _dump_footer(outfile)
+    with open(outfilename, 'w', encoding='utf-8') as outfile:
+        top_level = True
+        for pou in pous:
+            name2var = {var.name: var for var in pou.input_vars +
+                        pou.local_vars + pou.output_vars}
+            if top_level:
+                _dump_header(pou, name2var, filename, outfile)
+            _translate_pou(pou, name2var, outfile)
+            top_level = False
+        _dump_footer(outfile)
 
 def _translate_pou(pou, name2var, outfile):
     print('Translating POU', pou.dtname)

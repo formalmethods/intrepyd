@@ -148,7 +148,7 @@ class Ast2Intrepyd(Visitor):
 
     def _get_unique_namespace(self, name):
         self._nid += 1
-        return '"%s.%d"' % (name, self._nid)
+        return f'"{name}.{self._nid}"'
 
     def _visit_node(self, node):
         assert isinstance(node, Node)

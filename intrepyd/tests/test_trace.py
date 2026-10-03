@@ -45,7 +45,7 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(6, nv(tr.get_value(i7, 0)))
         self.assertEqual(7.0, nv(tr.get_value(i8, 0)))
         df = tr.get_as_dataframe(ctx.net2name)
-        self.assertEqual('F', df[0][0])
+        self.assertEqual('F', df.iloc[0, 0])
         dd = tr.get_as_depth_dictionary()
         nd = tr.get_as_net_dictionary(ctx.net2name)
 

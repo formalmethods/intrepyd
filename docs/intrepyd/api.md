@@ -655,6 +655,14 @@ Functions
     y: Int_net
 
     
+`pop_assumption(arg1)`
+:   pop_assumption(Int_ctx arg1)
+    
+    Parameters
+    ----------
+    arg1: Int_ctx
+
+    
 `pop_namespace(ctx)`
 :   pop_namespace(Int_ctx ctx)
     
@@ -669,6 +677,15 @@ Functions
     Parameters
     ----------
     ctx: Int_ctx
+    net: Int_net
+
+    
+`push_assumption(arg1, net)`
+:   push_assumption(Int_ctx arg1, Int_net net)
+    
+    Parameters
+    ----------
+    arg1: Int_ctx
     net: Int_net
 
     

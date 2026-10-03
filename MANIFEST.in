@@ -1,4 +1,5 @@
-recursive-include libs *.dll *.pyd *.so
 include LICENSE.md
 include CREDITS.md
 include VERSION
+include INTREPID_VERSION
+include fetch_intrepid.py

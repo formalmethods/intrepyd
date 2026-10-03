@@ -26,7 +26,9 @@ class SimulatorsTestCase(unittest.TestCase):
                                       'y': '__l1'
                                     })
         self.assertEqual(201, response.status_code)
-        self.assertEqual({'result': '__n10'}, response.get_json())
+        # Generated names embed z3 ast ids, which shift between z3 versions:
+        # remember what the service returned rather than hardcoding it.
+        self.and_net = response.get_json()['result']
 
     def tearDown(self):
         intrepid.destroy_app()
@@ -66,7 +68,7 @@ class SimulatorsTestCase(unittest.TestCase):
                                     json={
                                       'context': CTX_NAME,
                                       'simulator': 's0',
-                                      'net': '__n10'
+                                      'net': self.and_net
                                     })
         self.assertEqual(200, response.status_code)
         self.assertEqual({'result': 'ok'}, response.get_json())
@@ -79,7 +81,7 @@ class SimulatorsTestCase(unittest.TestCase):
                                     })
         self.assertEqual(200, response.status_code)
         self.assertEqual({'result': 'ok'}, response.get_json())
-        response = self.client.get(PREFIX + 'traces/value?context={}&trace=t0&depth=0&net=__n10'.format(CTX_NAME))
+        response = self.client.get(PREFIX + 'traces/value?context={}&trace=t0&depth=0&net={}'.format(CTX_NAME, self.and_net))
         self.assertEqual(200, response.status_code)
         self.assertEqual({'result': 'T'}, response.get_json())
 

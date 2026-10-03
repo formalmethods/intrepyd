@@ -66,7 +66,7 @@ def _retrieve_modes_order(ordfilename):
     mode_str2mode = {}
     mode_str2mode_value = {}
     lines = []
-    with open(ordfilename, 'r') as ordfile:
+    with open(ordfilename, 'r', encoding='utf-8') as ordfile:
         lines = ordfile.readlines()
     i = 0
     for line in lines:
@@ -83,11 +83,11 @@ def _mk_scr_helper(ctx, csvfilename, mode_str2mode, mode_str2mode_value,\
     first_row = True
     result = past_mode
     row_number = 1
-    with open(csvfilename, 'r') as csvfile:
+    with open(csvfilename, 'r', encoding='utf-8') as csvfile:
         for row in csv.reader(csvfile, delimiter=','):
             if len(inputs) + 2 != len(row):
-                raise Exception('Input number mismatch: expected {}, actual {}'\
-                                .format(len(inputs), len(row) - 2))
+                raise Exception(f'Input number mismatch: expected {len(inputs)}, '
+                                f'actual {len(row) - 2}')
             if first_row:
                 first_row = False
                 continue

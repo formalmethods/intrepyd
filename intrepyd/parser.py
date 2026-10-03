@@ -84,7 +84,7 @@ class Parser:
         """
         Parses the file, and returns the context
         """
-        with open(filepath, "rt") as file:
+        with open(filepath, "rt", encoding="utf-8") as file:
             return self.parse_stream(file)
 
     def parse_stream(self, stream):

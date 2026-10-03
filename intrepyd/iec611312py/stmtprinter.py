@@ -3,8 +3,6 @@ This module implements a printer for the parsed AST
 """
 
 from intrepyd.iec611312py.visitor import Visitor
-from intrepyd.iec611312py.statement import Assignment
-from intrepyd.iec611312py.expression import VariableOcc, Expression
 
 def termAsString(term):
     printer = StmtPrinter()
@@ -36,13 +34,13 @@ class StmtPrinter(Visitor):
         first = True
         if len(obj.conditions) != len(obj.stmt_blocks):
             raise RuntimeError('Wrong number of conditions and statements in if then else')
-        for i in range(len(obj.conditions)):
+        for i, condition in enumerate(obj.conditions):
             if first:
                 self._result += 'IF '
                 first = False
             else:
                 self._result += 'ELSIF '
-            obj.conditions[i].accept(self)
+            condition.accept(self)
             self._result += ' THEN '
             for statement in obj.stmt_blocks[i]:
                 statement.accept(self)
@@ -57,8 +55,8 @@ class StmtPrinter(Visitor):
         self._result += 'CASE '
         obj.expression.accept(self)
         self._result += ' OF '
-        for i in range(len(selections)):
-            for selection in selections[i]:
+        for i, selection_group in enumerate(selections):
+            for selection in selection_group:
                 selection.accept(self)
             self._result += ': '
             for statement in statements[i]:

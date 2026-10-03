@@ -6,7 +6,7 @@ Functions
 ---------
 
     
-`build_ite(varOcc, conditions, rewritten_stmt_blocks)`
+`build_ite(var_occ, conditions, rewritten_stmt_blocks)`
 :   
 
     
@@ -14,7 +14,7 @@ Functions
 :   
 
     
-`find_rhs_for(varOcc, block)`
+`find_rhs_for(var_occ, block)`
 :   
 
 Classes
@@ -35,7 +35,4 @@ Classes
     :
 
     `flatten_stmt_block(self, block)`
-    :
-
-    `flatten_stmt_block_impl(self, block)`
-    :
+    :   Flatten a statement block

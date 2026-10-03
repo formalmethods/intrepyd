@@ -63,7 +63,7 @@ def translate(filename, topnode, outfilename, realtype):
     if top is None:
         raise Exception('Top node not found')
 
-    with open(outfilename, 'w') as outfile:
+    with open(outfilename, 'w', encoding='utf-8') as outfile:
         today = str(datetime.date.today())
         outfile.write('# Translated from ' + filename + ' using intrepyd.lustre2py on ' + today)
         outfile.write('\n\n')
@@ -87,7 +87,7 @@ def translate(filename, topnode, outfilename, realtype):
         index = 0
         inputs = []
         for ttype in node2proto[top.name][0]:
-            net = 'i%d' % index
+            net = f'i{index}'
             name = node2inputs[top.name][index]
             outfile.write(TAB + TAB + net + ' = ' + CONTEXT +\
                           ".mk_input('" + name + "', " +\

@@ -31,6 +31,7 @@ Classes
 
     `mk_assumption(self, net)`
     :   Creates an assumption
+        @deprecated
 
     `mk_backward_reach(self)`
     :   Creates a backward reachability engine
@@ -188,8 +189,14 @@ Classes
     `mk_xor(self, x, y, name=None)`
     :   Creates the net x ^ y
 
+    `pop_assumption(self)`
+    :   Pops an assumption
+
     `pop_namespace(self)`
     :   Pops a namespace
+
+    `push_assumption(self, net)`
+    :   Pushes an assumption
 
     `push_namespace(self, name)`
     :   Pushes a namespace

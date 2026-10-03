@@ -65,7 +65,7 @@ class Summarizer:
         elif isinstance(term, FunctionOcc):
             result = term
         else:
-            raise NotImplementedError('Term not handled %s' % type(term))
+            raise NotImplementedError(f'Term not handled {type(term)}')
         return result
 
     def substitute(self, rhs, summary):

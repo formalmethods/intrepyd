@@ -8,8 +8,8 @@ from intrepyd.iec611312py.expression import VariableOcc, ConstantOcc, Expression
 from intrepyd.iec611312py.variable import Variable
 
 def isNumber(text):
-    for i in range(len(text)):
-        if not text[i].isdigit() and text[i] != '.':
+    for char in text:
+        if not char.isdigit() and char != '.':
             return False
     return True
 

@@ -1,4 +1,5 @@
 import intrepid
+import re
 import unittest
 from intrepid import PREFIX
 
@@ -104,7 +105,9 @@ class NetsTestCase(unittest.TestCase):
                                       'type': 'int8'
                                     })
         self.assertEqual(201, response.status_code)
-        self.assertEqual({'result': '__n13'}, response.get_json())
+        # The generated name embeds a z3 ast id, which shifts between z3
+        # versions, so only its shape is asserted.
+        self.assertRegex(response.get_json()['result'], r'^__n\d+$')
 
     def test_create_unary_bool_gate(self):
         self.create_unary_gate('nots', 'boolean')
@@ -130,7 +133,9 @@ class NetsTestCase(unittest.TestCase):
                                       'z': self.names['b_int8']
                                     })
         self.assertEqual(201, response.status_code)
-        self.assertEqual({'result': '__n13'}, response.get_json())
+        # The generated name embeds a z3 ast id, which shifts between z3
+        # versions, so only its shape is asserted.
+        self.assertRegex(response.get_json()['result'], r'^__n\d+$')
 
     def test_create_cast(self):
         for cast in ['int8', 'int16', 'int32', 'int64',
