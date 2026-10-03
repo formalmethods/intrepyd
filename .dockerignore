@@ -1,0 +1,12 @@
+intrepyd.egg-info
+tools
+build
+dist
+**/__pycache__
+benchmarks
+venv
+.git
+examples
+Makefile.docker
+.intrepid/*
+!.intrepid/PLATFORM

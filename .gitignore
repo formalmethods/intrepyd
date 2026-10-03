@@ -1,13 +1,8 @@
 __pycache__
 *.pyc
-intrepid_build
-intrepid_build_debug
 build
 dist
 intrepyd.egg-info
-intrepid/deps
-libz3.dll
-intrepyd/_api.so
 venv
 htmlcov
 .coverage
@@ -16,3 +11,8 @@ intrepyd/formula2py/FormulaLexer.tokens
 intrepyd/formula2py/FormulaLexer.interp
 intrepyd/formula2py/Formula.tokens
 intrepyd/formula2py/Formula.interp
+# Put there by fetch_intrepid.py
+.intrepid
+intrepyd/libintrepid.so
+intrepyd/intrepid.dll
+intrepyd/LICENSE.intrepid

@@ -1,0 +1,21 @@
+# pylint configuration for intrepyd. Options not listed keep pylint's defaults.
+
+[MAIN]
+
+# 'make linter_python' fails below this score
+fail-under=9.5
+
+# The test suite is not linted
+ignore=tests
+
+# Generated code: the ANTLR lexers, parsers and visitors, and the binding,
+# whose functions are one line each and mirror the C API
+ignore-patterns=.*Parser.py|.*Lexer.py|api.py|.*Visitor.py
+
+[MESSAGES CONTROL]
+
+# Style choices of this code base: it raises Exception for user errors, and
+# its circuit builders take many positional arguments by design
+disable=broad-exception-raised,
+        too-many-arguments,
+        too-many-positional-arguments

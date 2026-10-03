@@ -25,13 +25,13 @@ docker_push_hub: docker_build
 	@docker push robertobruttomesso/intrepid
 	@docker push robertobruttomesso/intrepid:$(VERSION)
 
-docker_push_gitlab: docker_build
-	@echo "# Pushing docker image to gitlab"
-	@docker login registry.gitlab.com -u roberto.bruttomesso
-	@docker tag intrepid:latest registry.gitlab.com/roberto.bruttomesso/intrepyd:latest
-	@docker tag intrepid:latest registry.gitlab.com/roberto.bruttomesso/intrepyd:$(VERSION)
-	@docker push registry.gitlab.com/roberto.bruttomesso/intrepyd
-	@docker push registry.gitlab.com/roberto.bruttomesso/intrepyd:$(VERSION)
+docker_push_github: docker_build
+	@echo "# Pushing docker image to the github container registry"
+	@docker login ghcr.io
+	@docker tag intrepid:latest ghcr.io/formalmethods/intrepyd:latest
+	@docker tag intrepid:latest ghcr.io/formalmethods/intrepyd:$(VERSION)
+	@docker push ghcr.io/formalmethods/intrepyd:latest
+	@docker push ghcr.io/formalmethods/intrepyd:$(VERSION)
 
 docker_push_heroku: docker_build
 	@echo "# Pushing docker image to heroku"

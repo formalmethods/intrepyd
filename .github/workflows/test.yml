@@ -1,0 +1,47 @@
+# Lints and tests intrepyd against the intrepid release named in
+# INTREPID_VERSION, on Linux and Windows, under several python versions.
+#
+# intrepid is a private repository: fetch_intrepid.py downloads its release
+# with the INTREPID_TOKEN secret, a fine-grained personal access token with
+# read access to the contents of formalmethods/intrepid. The workflow's own
+# GITHUB_TOKEN only reaches this repository, so it cannot be used.
+
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        # The binding is pure python on top of a C library, so one library
+        # works across interpreters; the versions guard against source level
+        # incompatibilities, like the one that broke typing.io on 3.13.
+        python: ['3.9', '3.11', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install the requirements
+        run: pip install -r requirements.txt
+
+      - name: Fetch the intrepid library
+        env:
+          GITHUB_TOKEN: ${{ secrets.INTREPID_TOKEN }}
+        run: python fetch_intrepid.py
+
+      - name: Lint
+        run: python -m pylint intrepyd
+
+      - name: Test
+        run: python -m unittest discover -v

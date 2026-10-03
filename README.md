@@ -80,7 +80,7 @@ pip install intrepyd
 ## Working from Source
 
 ```
-git clone https://gitlab.com/roberto.bruttomesso/intrepyd.git
+git clone https://github.com/formalmethods/intrepyd.git
 cd intrepyd
 make bootstrap_linux
 make
@@ -498,8 +498,8 @@ The same syntax is available in-process through `intrepyd.parser.Parser`, with
 
 Container images are published on
 [Docker Hub](https://hub.docker.com/r/robertobruttomesso/intrepid), and
-`Makefile.docker` has targets for building and pushing to Docker Hub, GitLab,
-Heroku and AWS ECR.
+`Makefile.docker` has targets for building and pushing to Docker Hub, the
+GitHub container registry, Heroku and AWS ECR.
 
 ## Api Documentation
 
@@ -538,10 +538,13 @@ To move to a new release of intrepid, update `INTREPID_VERSION` and run
 the functions whose signature no longer matches; update the `_bind` lines in
 `api.py` to follow.
 
-The Docker image and `.gitlab-ci.yml` use the library like everything else:
-`make -f Makefile.docker docker_build` fetches the linux one first, and the CI
-needs a `GITHUB_TOKEN` variable to download it. CI tests against several python
-versions.
+The Docker image and CI use the library like everything else:
+`make -f Makefile.docker docker_build` fetches the linux one first, and the
+GitHub workflow in `.github/workflows/test.yml` fetches it on every run, then
+lints and tests under several python versions, on Linux and Windows. Since
+intrepid is private, the workflow needs a repository secret `INTREPID_TOKEN`:
+a fine-grained personal access token with read access to the contents of
+formalmethods/intrepid.
 
 # License
 
