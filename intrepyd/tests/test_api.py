@@ -23,6 +23,7 @@ def _parse_header(path):
     types = {
         'Int_ctx': api.HANDLE, 'Int_type': api.HANDLE, 'Int_engine_bmc': api.HANDLE,
         'Int_engine_br': api.HANDLE, 'Int_engine_ti': api.HANDLE,
+        'Int_engine_pdr': api.HANDLE,
         'Int_simulator': api.HANDLE, 'Int_trace': api.HANDLE,
         'Int_net': api.UINT, 'unsigned': api.UINT, 'Int_engine_result': api.INT,
         'const char*': api.STR, 'char*': api.STR, 'char': api.CHAR, 'void': api.VOID,

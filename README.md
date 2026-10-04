@@ -39,10 +39,10 @@ Intrepyd is built in two layers:
 
 - **intrepid** — a C++17 model checking library built on the
   [Z3](https://github.com/Z3Prover/z3) SMT solver. It provides a net/circuit
-  representation, an unroller, and three engines: bounded model checking (with
-  k-induction), backward reachability, and a simulator. It is developed in a
-  separate, private repository and comes here as a prebuilt shared library,
-  `libintrepid`, with a plain C API.
+  representation, an unroller, and four engines: bounded model checking (with
+  k-induction), backward reachability, IC3/PDR, and a simulator. It is
+  developed in a separate, private repository and comes here as a prebuilt
+  shared library, `libintrepid`, with a plain C API.
 - **intrepyd** — this python package. `intrepyd/api.py` loads `libintrepid`
   with `ctypes`; on top of it come front-ends for Lustre and IEC 61131-3
   Structured Text, pandas-based traces, and a Flask REST service.
@@ -343,6 +343,43 @@ The three results mean:
 `mk_optimizing_bmc()` returns a BMC engine backed by the Z3 optimizer, for
 finding minimal-cost counterexamples.
 
+### IC3/PDR
+
+`mk_pdr()` returns an IC3/PDR engine, built on Spacer, the one of Z3. Like
+backward reachability it answers in one call, and can prove a target
+unreachable; it does so by finding an inductive invariant, which is often
+possible where k-induction and backward reachability get nowhere:
+
+```python
+import intrepyd as ip
+from intrepyd.engine import EngineResult
+
+ctx = ip.Context()
+int_t = ctx.mk_int_type()
+
+c = ctx.mk_latch('c', int_t)
+ctx.set_latch_init_next(c, ctx.mk_number('0', int_t),
+                        ctx.mk_add(c, ctx.mk_number('1', int_t)))
+
+pdr = ctx.mk_pdr()
+pdr.add_target(ctx.mk_eq(c, ctx.mk_number('-1', int_t)))
+assert pdr.reach_targets() == EngineResult.UNREACHABLE   # invariant: c >= 0
+```
+
+k-induction cannot prove this one, as `-2, -1` is a path that ignores the
+initial state, and backward reachability would follow `-1, -2, -3, ...` for
+ever. When a target is reachable, the counterexample comes from BMC, so
+`get_last_trace()` returns a shortest one.
+
+Proofs are checked: before answering `UNREACHABLE`, the engine verifies that
+the invariant found holds initially, is preserved by every step, and excludes
+the targets. If it does not, which can happen with some versions of Z3, the
+answer is `UNKNOWN` rather than a wrong proof.
+
+PDR is at its best on unbounded integers (`mk_int_type()`, or
+`inttype='int'` when translating Lustre); it also handles fixed width
+integers, but bit-vector invariants are harder to find.
+
 ## Importing Models
 
 Rather than building circuits by hand, you can translate existing models. Both
@@ -490,7 +527,7 @@ curl -X GET "$BASE/traces/values?context=demo&trace=t0"
 # {"result":{"__i0":["T"],"__i1":["T"]}}
 ```
 
-Engine kinds are `bmc`, `optimizing_bmc` and `backward_reach`. Nets are created
+Engine kinds are `bmc`, `optimizing_bmc`, `backward_reach` and `pdr`. Nets are created
 under `/nets/<operator>s/create` (`ands`, `ors`, `nots`, `eqs`, `ites`,
 `numbers`, ...); binary operators take `x` and `y`, unary ones take `x`.
 

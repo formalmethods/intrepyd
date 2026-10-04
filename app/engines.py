@@ -48,6 +48,8 @@ def create_engine():
         eng = ctx.mk_optimizing_bmc()
     elif engine == 'backward_reach':
         eng = ctx.mk_backward_reach()
+    elif engine == 'pdr':
+        eng = ctx.mk_pdr()
     else:
         return {'result': 'error: unknown engine {}'.format(engine)}, 400
     assert eng is not None

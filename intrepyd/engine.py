@@ -238,3 +238,49 @@ class BackwardReach(Engine):
 
     def _remove_last_reached_targets_impl(self):
         return ip.api.br_remove_last_reached_targets(self.breach)
+
+
+class Pdr(Engine):
+    """
+    An IC3/PDR engine, on top of z3's Spacer: it can prove targets
+    unreachable by finding an inductive invariant, also when k-induction and
+    backward reachability cannot; it works best on unbounded integers
+    """
+
+    def __init__(self, ctx):
+        Engine.__init__(self, ctx)
+        self.pdr = ip.api.mk_engine_pdr(self.ctx)
+
+    def add_target(self, net):
+        ip.api.pdr_add_target(self.ctx, self.pdr, net)
+
+    def get_last_trace(self):
+        if self.last_result != EngineResult.REACHABLE:
+            raise Exception('Cannot get a trace as last result was not REACHABLE')
+        target = next(self.get_last_reached_targets())
+        rawtrace = ip.api.pdr_get_trace(self.ctx, self.pdr, target)
+        return ip.trace.Trace(self.ctx, rawtrace)
+
+    def add_watch(self, net):
+        ip.api.pdr_add_watch(self.ctx, self.pdr, net)
+
+    def can_reach(self):
+        return True
+
+    def can_prove(self):
+        return True
+
+    def can_optimize(self):
+        return False
+
+    def _reach_targets_impl(self):
+        return ip.api.pdr_reach_targets(self.pdr)
+
+    def _get_last_reached_targets_number_impl(self):
+        return ip.api.pdr_last_reached_targets_number(self.pdr)
+
+    def _get_last_reached_target_impl(self, target):
+        return ip.api.pdr_last_reached_target(self.pdr, target)
+
+    def _remove_last_reached_targets_impl(self):
+        return ip.api.pdr_remove_last_reached_targets(self.pdr)

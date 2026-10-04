@@ -418,6 +418,12 @@ class Context:
         """
         return engine.BackwardReach(self.ctx)
 
+    def mk_pdr(self):
+        """
+        Creates an IC3/PDR engine
+        """
+        return engine.Pdr(self.ctx)
+
     def mk_simulator(self):
         """
         Creates a simulator

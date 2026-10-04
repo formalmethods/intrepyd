@@ -1,12 +1,18 @@
 # Plan
 
-What we have decided to implement, or would like to implement, in intrepyd
-and in intrepid. Each item says what and why; once an item is done, it moves
-to the bottom with a reference to its commit.
+What we have decided to implement, or would like to implement, in intrepyd.
+Each item says what and why; once an item is done, it moves to the bottom
+with a reference to its commit.
 
-Items are numbered, so they can be referred to as #1, #2, and so on. A number
-belongs to its item for good: new items take the next free number, and an item
-keeps its number when it is done or dropped.
+The items that only concern intrepid are in its own plan, the `PLAN.md` of
+the intrepid repository; the items that span both projects stay here, and
+link to it for the intrepid side.
+
+Items are numbered, so they can be referred to as #1, #2, and so on. The
+numbers are shared with the plan of intrepid, so that a number names one item
+across both projects: new items take the next free number of the two, and an
+item keeps its number when it is done, dropped, or moved from one plan to the
+other.
 
 ## To do
 
@@ -47,6 +53,16 @@ Horn Clauses: the system is described as
 and Spacer finds an inductive invariant, or a counterexample. It works well on
 linear arithmetic, so mostly with `inttype='int'`; it is weaker on
 bit-vectors.
+
+Status:
+
+- intrepid: done, released as v1.1.0 (`f0ee5b5`); see the plan of intrepid.
+  It adds the `Pdr` engine and the `mk_engine_pdr` / `pdr_*` C API; proofs
+  are certified (see #8).
+- intrepyd: implemented, not committed yet: `Context.mk_pdr()`, the
+  `engine.Pdr` class, the bindings in `api.py`, the `pdr` engine kind of the
+  REST service, tests and README, and `INTREPID_VERSION` moved to 1.1.0.
+  Once committed, this item is done.
 
 ### #3 Rewrite the documentation in `docs/`
 
@@ -166,3 +182,77 @@ invariants, which is #2.
 To settle: which Kind2 release, and which SMT solver it uses (z3, cvc5, or
 both), installed how; and whether `kind2-benchmarks.txt` comes from Kind2 at
 all, since its verdicts follow 32 bit semantics.
+
+### #8 Track the soundness of z3's Spacer
+
+Moved to the plan of intrepid.
+
+### #9 Engine based on invariants proposed by an AI
+
+A new engine where an AI model reads the circuit (or the Lustre or IEC
+61131-3 source it comes from) and proposes candidate invariants, and the
+existing engines decide which ones are true. The AI is never trusted: a
+candidate only counts once it is proved, so a wrong guess costs time, never a
+wrong verdict.
+
+The checking pipeline, cheapest first:
+
+- simulation: random and directed traces falsify most wrong candidates at
+  once;
+- BMC: a candidate that fails within a few steps from the initial states is
+  dropped, with its counterexample;
+- induction: the candidates that survive are checked to hold initially and to
+  be preserved by every step, together (Houdini style: drop the ones that
+  fail, until the rest is inductive), possibly relative to the property; this
+  is the same check that certifies the invariants of the PDR engine (#2);
+- the inductive candidates then strengthen the property for k-induction,
+  backward reachability or PDR, which may prove it where they could not
+  alone.
+
+What failed goes back to the AI: counterexamples to a candidate, or to the
+induction of the property, are the most useful hint for the next round.
+
+The AI is behind a small provider interface, so that the engine works with a
+local model (for instance one served by llama.cpp, Ollama or vLLM, through
+their OpenAI compatible HTTP API) or with a remote one through a stable
+public API (such as the Anthropic Messages API), chosen by configuration,
+with no change to the engine. A recorded, deterministic provider runs the
+tests offline.
+
+To settle: whether the orchestration lives in intrepyd (python, close to the
+AI clients) with intrepid exposing an "is this invariant inductive" check in
+its C API, or in intrepid itself; how the circuit is shown to the model
+(source, or a textual rendering of the nets); the format of the candidates;
+and how credentials and model choice are configured.
+
+### #10 Run the engines in parallel, and stop at the first useful answer
+
+A portfolio mode: given a model and its targets, run BMC, k-induction,
+backward reachability and PDR at the same time, and stop all of them as soon
+as one gives a conclusive answer (a counterexample, or a proof), returning it
+together with which engine found it.
+
+The engines are complementary, so this is worth having: on the Kind2
+benchmarks BMC finds counterexamples fastest, while the proofs come from
+different engines for different models (PDR proves many that nothing else
+does, but backward reachability and k-induction still close some that PDR
+does not). A portfolio gets the best of each, as Kind2 does by default, and
+is also what #7 should compare against Kind2's portfolio.
+
+Things to get right:
+
+- isolation: one intrepid context, its z3 context and its net store are not
+  meant to be shared between threads; either each engine runs in its own
+  process, or in its own thread with its own context and a copy of the
+  circuit (z3 can translate terms between contexts);
+- stopping: the losers must be stopped promptly and cleanly, by killing the
+  process or interrupting z3 (`Z3_interrupt`) in their thread;
+- the result: the verdict, the engine, the time, and for a counterexample a
+  trace that belongs to the caller's context;
+- resources: how many engines run at once, on how many cores, with which
+  overall timeout and memory limit; which engines take part, and with which
+  settings (k-induction depth, int encoding for Lustre).
+
+To settle: whether this lives in intrepyd (python processes, simplest) or in
+intrepid's C API (threads, usable from C too). The AI engine of #9 could join
+the portfolio later, as one more participant.
