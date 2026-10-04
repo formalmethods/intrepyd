@@ -29,12 +29,22 @@ def compute_node_names(decls):
         names += decl.variables
     return names
 
-def translate(filename, topnode, outfilename, realtype):
+INT_TYPES = ['int', 'int8', 'int16', 'int32', 'int64']
+REAL_TYPES = ['real', 'float16', 'float32', 'float64']
+
+def translate(filename, topnode, outfilename, realtype, inttype='int32'):
     """
     Translates a lustre file into a python
+
+    realtype and inttype choose how lustre real and int are encoded. For
+    int, 'int' is the unbounded integers of lustre itself, while 'int8' to
+    'int64' are machine integers of that width, which can overflow: a
+    property may then hold with one encoding and not with the other.
     """
-    if not realtype in ['real', 'float16', 'float32', 'float64']:
+    if not realtype in REAL_TYPES:
         raise Exception('Unsupported real type ' + realtype)
+    if not inttype in INT_TYPES:
+        raise Exception('Unsupported int type ' + inttype)
     # Parse lustre into AST
     ast = lusp.parse(filename)
     # Compute nodes prototypes
@@ -76,7 +86,7 @@ def translate(filename, topnode, outfilename, realtype):
         outfile.write(TAB + 'def __init__(self, ctx, name):\n')
         outfile.write(TAB + TAB + 'ip.circuit.Circuit.__init__(self, ctx, name)\n')
         outfile.write(TAB + TAB + BOOLTYPE + ' = ' + CONTEXT + '.mk_boolean_type()\n')
-        outfile.write(TAB + TAB + INTTYPE + ' = ' + CONTEXT + '.mk_int32_type()\n')
+        outfile.write(TAB + TAB + INTTYPE + ' = ' + CONTEXT + '.mk_' + inttype + '_type()\n')
         outfile.write(TAB + TAB + REALTYPE + ' = ' + CONTEXT + '.mk_' + realtype + '_type()\n')
         outfile.write(TAB + TAB + FIRSTTICK + ' = ' + CONTEXT +\
                       '.mk_latch("' + FIRSTTICK + '", ' + BOOLTYPE + ')\n')

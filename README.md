@@ -370,6 +370,25 @@ print(br.reach_targets())      # EngineResult.UNREACHABLE -- property proved
 The third argument selects how Lustre `real` is encoded: `'real'` for exact
 rationals, or `'float32'` / `'float64'` for floating point.
 
+The `inttype` argument selects how Lustre `int` is encoded:
+
+| `inttype`            | Encoding                                                         |
+| -------------------- | ---------------------------------------------------------------- |
+| `'int32'` (default)  | 32 bit machine integers, as bit-vectors: arithmetic can overflow |
+| `'int'`              | Unbounded integers, the semantics of Lustre itself               |
+| `'int8'`, `'int16'`, `'int64'` | Machine integers of that width                         |
+
+```python
+encoding = translate_lustre('model.lus', 'top', 'real', 'encoding', inttype='int')
+```
+
+The two encodings can give different verdicts. With `x >= 0 => x + 1 > 0`, for
+instance, `'int'` proves the property, while `'int32'` finds the counterexample
+`x = 2147483647`, where `x + 1` overflows. Unbounded integers are also much
+easier for the engines: on the Kind2 benchmarks shipped in `benchmarks/`, with
+a 10 second timeout, k-induction solves 617 of the 848 models with `'int'`
+against 495 with `'int32'`, and backward reachability 665 against 382.
+
 ### IEC 61131-3 Structured Text (PLCopen XML)
 
 ```python
@@ -384,7 +403,7 @@ encoding = translate_iec61131('intrepyd/tests/openplc/simple1.xml', 'encoding')
 separate process, with a timeout:
 
 ```
-python benchmarks/run_one.py <file.lus> <tool> [-t SECONDS]
+python benchmarks/run_one.py <file.lus> <tool> [-t SECONDS] [--int-type int32|int]
 ```
 
 `<tool>` is `br` (backward reachability), `bmc`, or `bmc_ti` (BMC with

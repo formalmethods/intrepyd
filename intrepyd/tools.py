@@ -9,12 +9,16 @@ from pandas import read_csv
 import intrepyd.lustre2py.translator as ltr
 import intrepyd.iec611312py.translator as itr
 
-def translate_lustre(infilename, topnode, realtype, outmodule='encoding'):
+def translate_lustre(infilename, topnode, realtype, outmodule='encoding', inttype='int32'):
     """
     Translates a lustre file into intrepyd syntax
+
+    inttype is 'int32' by default, as it always was; 'int' encodes lustre
+    int as unbounded integers, its actual semantics, which is often much
+    easier for the engines too
     """
     outfilename = outmodule + '.py'
-    ltr.translate(infilename, topnode, outfilename, realtype)
+    ltr.translate(infilename, topnode, outfilename, realtype, inttype)
     enc = importlib.import_module(outmodule)
     return enc
 

@@ -130,10 +130,13 @@ def run():
                                  help='specifies the tool to be run (br, bmc, bmc_ti)')
     argument_parser.add_argument('-t', '--timeout', type=int, default=60,
                                  help='specifies the timeout in seconds for each benchmark')
+    argument_parser.add_argument('--int-type', default='int32', choices=translator.INT_TYPES,
+                                 help='how lustre int is encoded: int32 (the default), or int '
+                                      'for unbounded integers')
     parsed_args = argument_parser.parse_args()
     try:
         fname = parsed_args.filepath
-        translator.translate(fname, 'top', 'encoding.py', 'real')
+        translator.translate(fname, 'top', 'encoding.py', 'real', parsed_args.int_type)
         time.sleep(1) # Give some extra time to write encoding.py to a file
         print('{} {}'.format(fname, parsed_args.tool), end='')
         res, elapsed = run_with_timeout(parsed_args.timeout, parsed_args.tool)
