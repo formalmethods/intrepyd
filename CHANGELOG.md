@@ -12,7 +12,7 @@ The first release built on the new intrepid library, after four years.
   python: it loads the intrepid model checking library through `ctypes`
   instead of a SWIG module built for one python version. Wheels are
   published for Linux (x86-64, glibc 2.28 or newer) and Windows (x86-64),
-  and work with python 3.9 or newer. Earlier releases were source archives
+  and work with python 3.11 or newer. Earlier releases were source archives
   carrying prebuilt SWIG modules.
 - **macOS is no longer supported.**
 - **IC3/PDR engine:** `Context.mk_pdr()`, on top of Z3's Spacer. It proves
@@ -26,4 +26,7 @@ The first release built on the new intrepid library, after four years.
 - **Fewer dependencies:** installing intrepyd no longer installs Flask and
   gunicorn, which only the REST service needs; `pip install intrepyd[plots]`
   also installs matplotlib, which `intrepyd.plots` needs.
+- **Docker image of the REST service**, published with each release as
+  `ghcr.io/formalmethods/intrepyd` and `robertobruttomesso/intrepid` on
+  Docker Hub, tagged with the version and `latest`.
 - Built on intrepid 1.1.0.

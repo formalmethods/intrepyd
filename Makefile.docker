@@ -1,52 +1,35 @@
-AWS_ACCOUNT=338902401816.dkr.ecr.eu-central-1.amazonaws.com
-VERSION=`cat VERSION`
+# Builds and tries out the Docker image of the REST service locally. Releases
+# do not use this: the release workflow, .github/workflows/release.yml, builds
+# the image from the wheel it has checked, tests it, and publishes it on
+# ghcr.io/formalmethods/intrepyd and docker.io/robertobruttomesso/intrepid.
+#
+#   make -f Makefile.docker docker_test     build the image, run it, check it
 
-all: docker_push_aws docker_push_hub
+PYTHON?=python3
+IMAGE?=intrepyd
+VERSION:=$(shell cat VERSION)
+PORT?=8000
 
-# The image bundles the linux library: fetch it first
+.PHONY: docker_build docker_run docker_stop docker_test
+
+# The image installs the linux wheel from dist/: build it first, removing the
+# linux wheels of other versions, which the Dockerfile would refuse
 docker_build:
-	@$(MAKE) --no-print-directory fetch_intrepid PLATFORM=linux-x86_64
-	@echo "# Building docker image"
-	@docker build -t intrepid:latest .
-	@docker tag intrepid:latest intrepid:$(VERSION)
+	@rm -f dist/intrepyd-*-manylinux_*_x86_64.whl
+	@$(MAKE) --no-print-directory wheel PLATFORM=linux-x86_64
+	@echo "# Building the image $(IMAGE):$(VERSION)"
+	@docker build --build-arg VERSION=$(VERSION) -t $(IMAGE):$(VERSION) -t $(IMAGE):latest .
 
-docker_prune:
-	@docker container prune -f
+# Serves the REST API on http://127.0.0.1:$(PORT)
+docker_run: docker_stop
+	@docker run -d -p $(PORT):8000 --name=intrepyd $(IMAGE):$(VERSION) >/dev/null
+	@echo "# The REST service is on http://127.0.0.1:$(PORT)/api/v1/"
 
-docker_run: docker_prune
-	@echo "# Runnig docker container from image"
-	@docker run -p 8000:8000 --name=intrepid -d intrepid:latest
+docker_stop:
+	@docker rm -f intrepyd >/dev/null 2>&1 || true
 
-docker_push_hub: docker_build
-	@echo "# Pushing docker image to hub"
-	@docker login --username=robertobruttomesso
-	@docker tag intrepid:latest robertobruttomesso/intrepid:latest
-	@docker tag intrepid:latest robertobruttomesso/intrepid:$(VERSION)
-	@docker push robertobruttomesso/intrepid
-	@docker push robertobruttomesso/intrepid:$(VERSION)
-
-docker_push_github: docker_build
-	@echo "# Pushing docker image to the github container registry"
-	@docker login ghcr.io
-	@docker tag intrepid:latest ghcr.io/formalmethods/intrepyd:latest
-	@docker tag intrepid:latest ghcr.io/formalmethods/intrepyd:$(VERSION)
-	@docker push ghcr.io/formalmethods/intrepyd:latest
-	@docker push ghcr.io/formalmethods/intrepyd:$(VERSION)
-
-docker_push_heroku: docker_build
-	@echo "# Pushing docker image to heroku"
-	@heroku login
-	@heroku container:login
-	@docker tag intrepid:latest registry.heroku.com/formalmethods/web:latest
-	@docker tag intrepid:latest registry.heroku.com/formalmethods/web:$(VERSION)
-	@docker push registry.heroku.com/formalmethods/web
-	@docker push registry.heroku.com/formalmethods/web:$(VERSION)
-	@heroku container:release web
-
-docker_push_aws: docker_build
-	@echo "# Pushing docker image to aws"
-	@aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin 338902401816.dkr.ecr.eu-central-1.amazonaws.com
-	@docker tag intrepid:latest $(AWS_ACCOUNT)/intrepid:latest
-	@docker tag intrepid:latest $(AWS_ACCOUNT)/intrepid:$(VERSION)
-	@docker push $(AWS_ACCOUNT)/intrepid
-	@docker push $(AWS_ACCOUNT)/intrepid:$(VERSION)
+# What the release workflow checks before publishing the image
+docker_test: docker_build docker_run
+	@$(PYTHON) tools/check_image.py http://127.0.0.1:$(PORT); status=$$?; \
+	if [ $$status -ne 0 ]; then docker logs intrepyd; fi; \
+	docker rm -f intrepyd >/dev/null; exit $$status

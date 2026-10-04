@@ -1,31 +1,40 @@
+# The REST service of intrepyd, served by gunicorn on port 8000.
+#
+# Nothing is compiled, nor built from the sources: the image installs the
+# linux wheel of intrepyd from dist/, which holds the intrepid library, so
+# build the wheel first. The release workflow uses the wheel it has just
+# checked; locally:
+#   make -f Makefile.docker docker_build
+#
+# The service itself, app/ and intrepid.py, is not part of the wheel: it is
+# copied next to it, and its requirements are the rest group of
+# pyproject.toml, which needs pip 25.1 or newer.
+
 FROM python:3.13-slim
 
-ENV FLASK_APP=intrepid.py
+ARG VERSION=unknown
+LABEL org.opencontainers.image.title="intrepyd" \
+      org.opencontainers.image.description="REST service of the intrepyd simulator and model checkers" \
+      org.opencontainers.image.source="https://github.com/formalmethods/intrepyd" \
+      org.opencontainers.image.url="https://github.com/formalmethods/intrepyd" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="BSD-3-Clause AND LicenseRef-Intrepid AND MIT"
+
+COPY dist/ /tmp/dist/
+COPY pyproject.toml /tmp/pyproject.toml
+RUN set -e; \
+    wheels=$(ls /tmp/dist/intrepyd-*-manylinux_*_x86_64.whl 2>/dev/null || true); \
+    [ "$(echo "$wheels" | grep -c .)" -eq 1 ] || \
+        { echo "Error: dist/ must hold exactly one linux wheel of intrepyd, it has: $wheels"; exit 1; }; \
+    pip install --no-cache-dir --root-user-action=ignore --upgrade 'pip>=25.1'; \
+    cd /tmp && pip install --no-cache-dir --root-user-action=ignore "$wheels" --group rest; \
+    rm -fr /tmp/dist /tmp/pyproject.toml
 
 RUN useradd -ms /bin/bash intrepid
-
 WORKDIR /home/intrepid
+COPY --chown=intrepid:intrepid app app
+COPY --chown=intrepid:intrepid intrepid.py docker/app.sh ./
 USER intrepid
-ENV PATH="/home/intrepid/.local/bin:${PATH}"
-
-# Nothing is compiled here: the intrepid library comes prebuilt, and must be
-# fetched into intrepyd/ before building the image, with
-#   make fetch_intrepid
-# .intrepid/PLATFORM records which platform it is for; setup.py needs it.
-# The REST service, app/ and intrepid.py, is not part of the package: it stays
-# in the working directory, and its requirements are the rest group of
-# pyproject.toml, which needs pip 25.1 or newer.
-ADD --chown=intrepid:intrepid intrepyd intrepyd
-ADD --chown=intrepid:intrepid app app
-COPY --chown=intrepid:intrepid .intrepid/PLATFORM .intrepid/PLATFORM
-COPY --chown=intrepid:intrepid pyproject.toml setup.py VERSION LICENSE.md CREDITS.md intrepid.py docker/app.sh ./
-COPY --chown=intrepid:intrepid docs/pypi.md docs/pypi.md
-
-RUN test -f intrepyd/libintrepid.so || \
-        { echo 'intrepyd/libintrepid.so is missing: run "make fetch_intrepid" first'; exit 1; } && \
-    pip install --no-cache-dir --user --upgrade 'pip>=25.1' && \
-    pip install --no-cache-dir --user . --group rest && \
-    rm -fr intrepyd .intrepid build intrepyd.egg-info docs pyproject.toml setup.py VERSION
 
 EXPOSE 8000
 ENTRYPOINT [ "./app.sh" ]

@@ -59,7 +59,7 @@ the library serves every python version.
 | ---------- | ---------------------------------------------------------- |
 | Linux      | x86-64, glibc 2.28 or newer                                |
 | Windows 10 | x86-64, needs the [Visual C++ Redistributable][1]          |
-| Python     | 3.9 or newer                                               |
+| Python     | 3.11 or newer                                              |
 
 Only 64 bit architectures are supported. macOS is not supported.
 
@@ -482,11 +482,17 @@ kept in `benchmarks/results_5_seconds/`.
 
 ## Model Checking in the Cloud
 
-Intrepid also runs as a REST service. From a container:
+Intrepid also runs as a REST service. From a container, published with
+every release on the GitHub container registry and on Docker Hub:
 
 ```
-docker run -p 8000:8000 robertobruttomesso/intrepid
+docker run -p 8000:8000 ghcr.io/formalmethods/intrepyd
+docker run -p 8000:8000 robertobruttomesso/intrepid      # the same image
 ```
+
+Each image is tagged with the version of intrepyd it holds, e.g.
+`ghcr.io/formalmethods/intrepyd:0.13.0`, and `latest` is the last final
+release. It serves the API with gunicorn on port 8000.
 
 or, from a source checkout, in development mode:
 
@@ -564,10 +570,18 @@ curl -X POST $BASE/upload -F 'file=@model.txt'
 The same syntax is available in-process through `intrepyd.parser.Parser`, with
 `parse_file()` and `parse_stream()`.
 
-Container images are published on
-[Docker Hub](https://hub.docker.com/r/robertobruttomesso/intrepid), and
-`Makefile.docker` has targets for building and pushing to Docker Hub, the
-GitHub container registry, Heroku and AWS ECR.
+The image installs the linux wheel of intrepyd, and copies the service next
+to it. To build and try it from a source checkout:
+
+```
+make -f Makefile.docker docker_test     # build the wheel and the image, run it, check it
+make -f Makefile.docker docker_run      # serve it on port 8000 (PORT=...)
+make -f Makefile.docker docker_stop
+```
+
+`docker_test` runs `tools/check_image.py` against the container, a short REST
+session with BMC, PDR and an uploaded model, which is also what a release
+checks before publishing the image.
 
 ## Api Documentation
 
@@ -597,7 +611,9 @@ The documentation for the REST API can be found
 | `INTREPID_VERSION`      | The release of intrepid this version of intrepyd is built on    |
 | `CHANGELOG.md`          | The changes of each release, which become its release notes     |
 | `docs/pypi.md`          | The description shown on PyPI                                   |
-| `tools/`                | Release checks: `check_release.py`, `check_wheel.py`            |
+| `tools/`                | Release checks: `check_release.py`, `check_wheel.py`, `check_image.py` |
+| `Dockerfile`            | The image of the REST service, built from the linux wheel       |
+| `Makefile.docker`       | Builds, runs and checks the image locally                       |
 
 # Development
 
@@ -613,8 +629,8 @@ the functions whose signature no longer matches; update the `_bind` lines in
 `api.py` to follow.
 
 The Docker image and CI use the library like everything else:
-`make -f Makefile.docker docker_build` fetches the linux one first, and the
-GitHub workflow in `.github/workflows/test.yml` fetches it on every run, then
+`make -f Makefile.docker docker_build` builds the linux wheel first, which
+fetches it, and the GitHub workflow in `.github/workflows/test.yml` fetches it on every run, then
 lints and tests under several python versions, on Linux and Windows. Since
 intrepid is private, the workflow needs a repository secret `INTREPID_TOKEN`:
 a fine-grained personal access token with read access to the contents of
@@ -643,16 +659,24 @@ uses `gh`). Otherwise it tags the commit and pushes the tag, which starts
 1. the tests of `test.yml`, on every platform and python version;
 2. the version checks again, against the tag;
 3. the wheels of both platforms, built with `make wheels`;
-4. each wheel installed on its platform, under python 3.9 and 3.13, and
+4. each wheel installed on its platform, under python 3.11 and 3.13, and
    checked by `tools/check_wheel.py`: version, license files, contents, and
    every engine on a small model;
-5. the wheels published on PyPI, then a GitHub release with the wheels and
-   the `CHANGELOG.md` section.
+5. the Docker image built from the linux wheel, run, and checked by
+   `tools/check_image.py`;
+6. the wheels published on PyPI;
+7. the image published, the very one that was checked, as
+   `ghcr.io/formalmethods/intrepyd` and `docker.io/robertobruttomesso/intrepid`,
+   tagged `<VERSION>` and, for a final release (`X.Y.Z`, not a pre-release),
+   `latest`;
+8. a GitHub release with the wheels and the `CHANGELOG.md` section.
 
-Nothing is published unless every earlier step succeeds. If the workflow
-fails before PyPI, fix the cause, run `make undorelease` to delete the tag,
-then commit, push and `make release` again; once the version is on PyPI,
-`make undorelease` refuses, and the fix needs a new version.
+Nothing is published unless every check succeeds. If the workflow fails
+before PyPI, fix the cause, run `make undorelease` to delete the tag, then
+commit, push and `make release` again; once the version is on PyPI,
+`make undorelease` refuses, and the fix needs a new version. If it fails
+after PyPI, on the image or the GitHub release, re-run the failed jobs from
+the GitHub Actions page.
 
 PyPI accepts the wheels through trusted publishing, without a token. This is
 set up once, on PyPI, in the publishing settings of the intrepyd project: add
@@ -660,6 +684,15 @@ a GitHub publisher with owner `formalmethods`, repository `intrepyd`,
 workflow `release.yml` and environment `pypi`; and, on GitHub, create the
 environment `pypi` in the settings of the repository (it can require a
 manual approval before each upload).
+
+The images need, in the secrets of the repository, `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN`: a Docker Hub user and an access token of it with write
+access to `robertobruttomesso/intrepid`. The workflow checks them before
+publishing anything. The GitHub container registry needs no secret, as the
+workflow pushes with its own token; if the `intrepyd` package of the
+formalmethods organization already exists, from an earlier push by hand, give
+this repository write access to it in the package settings ("Manage Actions
+access").
 
 # License
 

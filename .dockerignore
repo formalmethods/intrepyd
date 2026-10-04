@@ -1,12 +1,10 @@
-intrepyd.egg-info
-tools
-build
-dist
+# The image only needs the linux wheel, the rest group of pyproject.toml, and
+# the REST service: everything else stays out of the build context.
+*
+!dist/intrepyd-*-manylinux_*_x86_64.whl
+!pyproject.toml
+!app
+!intrepid.py
+!docker/app.sh
+app/tests
 **/__pycache__
-benchmarks
-venv
-.git
-examples
-Makefile.docker
-.intrepid/*
-!.intrepid/PLATFORM

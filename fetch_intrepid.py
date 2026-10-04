@@ -105,7 +105,7 @@ def extract(archive, cache_dir):
             top = package.getnames()[0].split('/')[0]
             try:
                 package.extractall(cache_dir, filter='data')
-            except TypeError:   # python older than 3.9.17, 3.10.12 or 3.11.4
+            except TypeError:   # python older than 3.11.4
                 package.extractall(cache_dir)
     return os.path.join(cache_dir, top)
 

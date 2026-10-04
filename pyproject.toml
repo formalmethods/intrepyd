@@ -18,7 +18,7 @@ maintainers = [{name = "Roberto Bruttomesso", email = "roberto.bruttomesso@gmail
 # is MIT (see CREDITS.md)
 license = "BSD-3-Clause AND LicenseRef-Intrepid AND MIT"
 license-files = ["LICENSE.md", "CREDITS.md", "intrepyd/LICENSE.intrepid"]
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 dependencies = [
     "pandas",
     # The pin is deliberate: the checked in lexers and parsers under

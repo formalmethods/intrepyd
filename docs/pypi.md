@@ -16,7 +16,7 @@ pip install intrepyd
 ```
 
 Wheels are available for Linux (x86-64, glibc 2.28 or newer) and Windows
-(x86-64), for python 3.9 or newer. Each one carries the intrepid model
+(x86-64), for python 3.11 or newer. Each one carries the intrepid model
 checking library for its platform, so there is nothing else to install.
 
 ```python

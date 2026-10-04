@@ -126,7 +126,7 @@ The packaging grew by accretion and should be reviewed as a whole:
 - `VERSION` and `INTREPID_VERSION` are bumped by hand: decide how versions are
   numbered and checked, and add a `make release` like the other repositories;
 - the published PyPI releases still ship the old SWIG `_api.so`, built for
-  python 3.9 only, with macOS wheels that will no longer be produced; decide
+  a single python version, with macOS wheels that will no longer be produced; decide
   what the first release of the new layout is called and what it says about
   the change.
 
@@ -153,6 +153,7 @@ Status: implemented, not committed yet.
   tag that matches it.
 - The first release of the new layout is 0.13.0 (0.12.0 is on PyPI already),
   described in `CHANGELOG.md`.
+- Python 3.11 or newer (`requires-python`), the versions CI tests.
 
 Still to do before the first release: on PyPI, add the trusted publisher
 (owner `formalmethods`, repository `intrepyd`, workflow `release.yml`,
@@ -259,6 +260,61 @@ Things to get right:
 To settle: whether this lives in intrepyd (python processes, simplest) or in
 intrepid's C API (threads, usable from C too). The AI engine of #9 could join
 the portfolio later, as one more participant.
+
+### #22 Review how the Docker image is published
+
+The Docker image of the REST service is still built and pushed by hand, from
+one machine, with `Makefile.docker`, while the wheels are now built, checked
+and published by CI on a tag (#6). The image has the same problems the wheels
+had:
+
+- it is built locally with `docker_build` and pushed by hand to four
+  registries, each with its own target and login: Docker Hub
+  (`robertobruttomesso/intrepid`, the one the README tells users to run),
+  the GitHub container registry, Heroku and AWS ECR; the default target
+  pushes to AWS and Docker Hub, and the AWS account is hardcoded in the
+  Makefile;
+- nothing tests the image: no check that it starts and answers the REST API
+  before it is pushed;
+- it is tagged `latest` and with `VERSION`, but is not tied to a release:
+  an image can be pushed from any commit, with uncommitted changes, under a
+  version that is already taken;
+- it is called `intrepid`, the name of the private library, rather than
+  after what it holds.
+
+Decide which registries the image goes to (keeping only those that are
+used, presumably the GitHub container registry, which needs no extra
+account, and Docker Hub for the existing users) and what it is called; then
+build it in CI on the release tag, from the wheel the release has just
+checked rather than from the sources, start it and run a short REST session
+against it, and push it with the version tag and `latest`, without any
+credentials outside the repository secrets. Document in the README how to run
+it and which tags exist.
+
+This belongs with #5: if the service moves to its own repository first,
+this is done there, against the intrepyd wheels published on PyPI.
+
+Status: implemented, not committed yet.
+
+- Registries: only the GitHub container registry,
+  `ghcr.io/formalmethods/intrepyd`, and Docker Hub,
+  `robertobruttomesso/intrepid`, keeping the names users already pull;
+  Heroku and AWS ECR are dropped, with their targets and the hardcoded
+  account.
+- The release workflow builds the image from the linux wheel it has just
+  checked, runs it and checks it with `tools/check_image.py` (a REST session
+  with BMC, PDR and an uploaded model), checks the Docker Hub credentials,
+  and only after PyPI pushes that same image (saved, not rebuilt), tagged
+  `<VERSION>` and, for a final release, `latest`; the GitHub release comes
+  last.
+- The `Dockerfile` installs the wheel and the `rest` group, with OCI labels
+  (source, version, license); `.dockerignore` is an allowlist.
+  `Makefile.docker` only builds, runs and checks the image locally
+  (`docker_test`); it no longer pushes anywhere.
+
+Still to do before the first release: add the `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN` secrets; if the ghcr.io package `intrepyd` already exists,
+give this repository write access to it.
 
 ## Done
 
