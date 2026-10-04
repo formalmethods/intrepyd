@@ -23,7 +23,12 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def check_installation():
     import intrepyd
     location = os.path.dirname(os.path.abspath(intrepyd.__file__))
-    if os.path.commonpath([location, HERE]) == HERE:
+    try:
+        from_sources = os.path.commonpath([location, HERE]) == HERE
+    except ValueError:
+        # On Windows the installed wheel and checkout may be on different drives.
+        from_sources = False
+    if from_sources:
         sys.exit('Error: intrepyd is imported from the sources, %s, not from '
                  'the installed wheel' % location)
     with open(os.path.join(HERE, 'VERSION'), encoding='utf-8') as version_file:
