@@ -54,7 +54,8 @@ Rewrite it for people who use intrepyd or develop it:
   with each engine (what it can prove, how to read its results, when to pick
   it), and importing Lustre and IEC 61131-3 models, including the int
   encoding choice;
-- the REST service, documented here too rather than only on Postman;
+- not the REST service, which moved to intrepyd-server with #5: its
+  documentation belongs there, and this one links to it;
 - an API reference that is curated rather than dumped: the public classes
   and functions, with examples, and without the generated internals.
 
@@ -109,56 +110,29 @@ To settle along the way: the name of the new repository; where the REST API
 documentation lives (with the service, linked from #3); and how its CI gets
 intrepyd and the intrepid library.
 
-### #6 Review how the python library is packaged and released
+Status: implemented, not committed yet, in the new repository
+`../intrepyd-server` (for `formalmethods/intrepyd-server` on GitHub), made
+with the history of the files it takes from here (`git filter-repo`):
 
-The packaging grew by accretion and should be reviewed as a whole:
+- the service (`app/`, its tests, `intrepid.py`), the image (`Dockerfile`,
+  `docker/app.sh`, `.dockerignore`) and `tools/check_image.py`; the targets
+  of `Makefile.docker` and `start_development_server.sh` became targets of
+  its `Makefile` (`run`, `docker_build`, `docker_run`, `docker_test`);
+- its requirements are pinned in `requirements.txt`, `intrepyd==0.14.0`
+  first, from PyPI, whose wheels carry the intrepid library: it needs no
+  access to intrepid, and Dependabot proposes the updates;
+- its CI lints, tests, and builds and checks the image; its release, from
+  `make release` as here, publishes the image (#22) and a GitHub release;
+  it has its own version (1.0.0) and `CHANGELOG.md`;
+- the REST API documentation moved there, and the README here points to it.
 
-- the build is described by `setup.py` and a `setup.cfg` with a deprecated
-  key, with no `pyproject.toml`; setuptools warns about the license
-  classifiers, and the license metadata has to say that the bundled intrepid
-  library is under its own license;
-- dependencies are duplicated between `setup.py` and `requirements.txt`, and
-  development tools (pylint, build) are mixed with runtime ones; `flask` and
-  `gunicorn` go away with #5;
-- the wheels, one per platform, are built by hand on one machine with
-  `make wheels` and uploaded by hand with twine: building and publishing
-  them should happen in CI, on a tag, as the intrepid releases do;
-- `VERSION` and `INTREPID_VERSION` are bumped by hand: decide how versions are
-  numbered and checked, and add a `make release` like the other repositories;
-- the published PyPI releases still ship the old SWIG `_api.so`, built for
-  a single python version, with macOS wheels that will no longer be produced; decide
-  what the first release of the new layout is called and what it says about
-  the change.
+Here, the service, the image, the `rest` dependency group and the image jobs
+of the release workflow are gone; `intrepyd.parser`, which the upload route
+uses, stays, and its syntax is now documented in the README.
 
-Status: implemented, not committed yet.
-
-- `pyproject.toml` holds the metadata, with a PEP 639 license expression
-  (`BSD-3-Clause AND LicenseRef-Intrepid AND MIT`) and the three license
-  files; `setup.py` only tags the wheels; `setup.cfg`, `MANIFEST.in` and
-  `requirements.txt` are gone. The wheel no longer installs `app/` as a top
-  level package, which it used to.
-- Runtime dependencies are only pandas and the antlr runtime; matplotlib is
-  the `plots` extra; Flask and gunicorn, pylint, coverage and the release
-  tools are dependency groups (`rest`, `lint`, `release`, `dev`), for
-  `make install_dev`, an editable install that replaces `PYTHONPATH`.
-- Releases: `make release` checks and pushes `v<VERSION>`, and
-  `.github/workflows/release.yml` tests, builds the wheels, installs and
-  checks each one on its platform (`tools/check_wheel.py`), publishes them on
-  PyPI by trusted publishing, then makes a GitHub release whose notes are the
-  `CHANGELOG.md` section of the version. `make undorelease` deletes the tag
-  until the version reaches PyPI. Only wheels are published: an sdist could
-  not be installed without the private intrepid library.
-- Versions: `tools/check_release.py` requires a canonical PEP 440 `VERSION`
-  later than every version on PyPI, a `CHANGELOG.md` section for it, and a
-  tag that matches it.
-- The first release of the new layout is 0.13.0 (0.12.0 is on PyPI already),
-  described in `CHANGELOG.md`.
-- Python 3.11 or newer (`requires-python`), the versions CI tests.
-
-Still to do before the first release: on PyPI, add the trusted publisher
-(owner `formalmethods`, repository `intrepyd`, workflow `release.yml`,
-environment `pypi`); on GitHub, create the `pypi` environment.
-
+Still to do: release intrepyd 0.14.0, which intrepyd-server pins (it brings
+the portfolio); then create the repository on GitHub, push, and release
+intrepyd-server 1.0.0.
 ### #7 Benchmark against Kind2 on the Lustre models, and optimize where we lose
 
 Measure intrepyd against Kind2, the reference model checker for Lustre, on the
@@ -229,65 +203,6 @@ its C API, or in intrepid itself; how the circuit is shown to the model
 (source, or a textual rendering of the nets); the format of the candidates;
 and how credentials and model choice are configured.
 
-### #10 Run the engines in parallel, and stop at the first useful answer
-
-A portfolio mode: given a model and its targets, run BMC, k-induction,
-backward reachability and PDR at the same time, and stop all of them as soon
-as one gives a conclusive answer (a counterexample, or a proof), returning it
-together with which engine found it.
-
-The engines are complementary, so this is worth having: on the Kind2
-benchmarks BMC finds counterexamples fastest, while the proofs come from
-different engines for different models (PDR proves many that nothing else
-does, but backward reachability and k-induction still close some that PDR
-does not). A portfolio gets the best of each, as Kind2 does by default, and
-is also what #7 should compare against Kind2's portfolio.
-
-Things to get right:
-
-- isolation: one intrepid context, its z3 context and its net store are not
-  meant to be shared between threads; either each engine runs in its own
-  process, or in its own thread with its own context and a copy of the
-  circuit (z3 can translate terms between contexts);
-- stopping: the losers must be stopped promptly and cleanly, by killing the
-  process or interrupting z3 (`Z3_interrupt`) in their thread;
-- the result: the verdict, the engine, the time, and for a counterexample a
-  trace that belongs to the caller's context;
-- resources: how many engines run at once, on how many cores, with which
-  overall timeout and memory limit; which engines take part, and with which
-  settings (k-induction depth, int encoding for Lustre).
-
-To settle: whether this lives in intrepyd (python processes, simplest) or in
-intrepid's C API (threads, usable from C too). The AI engine of #9 could join
-the portfolio later, as one more participant.
-
-Status: implemented, not committed yet, in intrepyd, with processes:
-
-- `Context.mk_portfolio(engines, max_depth)` returns `intrepyd.portfolio.
-  Portfolio`, an `Engine` that runs `bmc`, `kind`, `br` and `pdr` (all by
-  default), each in a process of its own, and returns the first conclusive
-  answer of `reach_targets(timeout)`, with `get_last_engine()`,
-  `get_last_time()` and `get_last_errors()`; the losers are terminated, and
-  a process also ends if its parent dies.
-- Isolation: each process builds the circuit again from the recipe of the
-  context (`intrepyd.recipe`): every `Context` records the calls that build
-  its circuit, with nets as references to the calls that made them, so the
-  same code works with forkserver on Linux and spawn on Windows, where there
-  is no fork. A circuit built through `intrepyd.api` directly cannot be
-  replayed, and the portfolio refuses it.
-- The counterexample is rebuilt in the caller's context by BMC at the depth
-  the winner found, when `get_last_trace()` first asks for it (a trace
-  cannot be copied value by value: intrepid crashes on `?` values, see #21
-  of intrepid's plan).
-- Also a `portfolio` engine kind of the REST service, and `pdr` and
-  `portfolio` tools of `benchmarks/run_one.py`.
-- On the Kind2 benchmarks, 10 second timeout, 8 portfolios at a time on 32
-  cores: 565 models of 848 with int32 and 797 with unbounded integers,
-  against 574 and 802 solved by at least one engine run alone; no
-  disagreement. The few lost were solved alone in 6 to 8 seconds. Each call
-  costs some 0.3 seconds more than the best engine alone, mostly to start the
-  process server (once per python process) and import intrepyd in it.
-
 ### #22 Review how the Docker image is published
 
 The Docker image of the REST service is still built and pushed by hand, from
@@ -321,27 +236,24 @@ it and which tags exist.
 This belongs with #5: if the service moves to its own repository first,
 this is done there, against the intrepyd wheels published on PyPI.
 
-Status: implemented, not committed yet.
+Status: implemented, not committed yet, in intrepyd-server (#5). The
+version of it that was here never published an image: intrepyd 0.13.0 was
+released before it.
 
-- Registries: only the GitHub container registry,
-  `ghcr.io/formalmethods/intrepyd`, and Docker Hub,
-  `robertobruttomesso/intrepid`, keeping the names users already pull;
-  Heroku and AWS ECR are dropped, with their targets and the hardcoded
-  account.
-- The release workflow builds the image from the linux wheel it has just
-  checked, runs it and checks it with `tools/check_image.py` (a REST session
-  with BMC, PDR and an uploaded model), checks the Docker Hub credentials,
-  and only after PyPI pushes that same image (saved, not rebuilt), tagged
-  `<VERSION>` and, for a final release, `latest`; the GitHub release comes
-  last.
-- The `Dockerfile` installs the wheel and the `rest` group, with OCI labels
-  (source, version, license); `.dockerignore` is an allowlist.
-  `Makefile.docker` only builds, runs and checks the image locally
-  (`docker_test`); it no longer pushes anywhere.
+- Registries: only the GitHub container registry, now
+  `ghcr.io/formalmethods/intrepyd-server`, and Docker Hub,
+  `robertobruttomesso/intrepid`, the name users already pull; Heroku and AWS
+  ECR are dropped, with their targets and the hardcoded account.
+- The release workflow of intrepyd-server checks the version and the Docker
+  Hub credentials, builds the image from the pinned requirements, runs it
+  and checks it with `tools/check_image.py` (a REST session with BMC, PDR
+  and an uploaded model), then pushes that same image (saved, not rebuilt),
+  tagged `<VERSION>` and, for a final release, `latest`, and makes a GitHub
+  release. The image is labelled with its source, version, license and the
+  version of intrepyd it holds.
 
-Still to do before the first release: add the `DOCKERHUB_USERNAME` and
-`DOCKERHUB_TOKEN` secrets; if the ghcr.io package `intrepyd` already exists,
-give this repository write access to it.
+Still to do before its first release: add the `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN` secrets to intrepyd-server.
 
 ## Done
 
@@ -354,3 +266,104 @@ invariants with z3's Spacer, and every proof it returns is certified (see
 #8). On the Kind2 benchmarks, with a 10 second timeout, it solves 520 models
 of 848 with int32 and 794 with unbounded integers, more than any other
 engine; together, the engines solve 574 and 802.
+
+### #6 Review how the python library is packaged and released
+
+The packaging grew by accretion and should be reviewed as a whole:
+
+- the build is described by `setup.py` and a `setup.cfg` with a deprecated
+  key, with no `pyproject.toml`; setuptools warns about the license
+  classifiers, and the license metadata has to say that the bundled intrepid
+  library is under its own license;
+- dependencies are duplicated between `setup.py` and `requirements.txt`, and
+  development tools (pylint, build) are mixed with runtime ones; `flask` and
+  `gunicorn` go away with #5;
+- the wheels, one per platform, are built by hand on one machine with
+  `make wheels` and uploaded by hand with twine: building and publishing
+  them should happen in CI, on a tag, as the intrepid releases do;
+- `VERSION` and `INTREPID_VERSION` are bumped by hand: decide how versions are
+  numbered and checked, and add a `make release` like the other repositories;
+- the published PyPI releases still ship the old SWIG `_api.so`, built for
+  a single python version, with macOS wheels that will no longer be produced; decide
+  what the first release of the new layout is called and what it says about
+  the change.
+
+Done in `8a4bb18` and the fixes that followed, and released as 0.13.0
+(`v0.13.0`, `1d497db`), the first release published by the CI:
+
+- `pyproject.toml` holds the metadata, with a PEP 639 license expression
+  (`BSD-3-Clause AND LicenseRef-Intrepid AND MIT`) and the three license
+  files; `setup.py` only tags the wheels; `setup.cfg`, `MANIFEST.in` and
+  `requirements.txt` are gone. The wheel no longer installs `app/` as a top
+  level package, which it used to.
+- Runtime dependencies are only pandas and the antlr runtime; matplotlib is
+  the `plots` extra; the development tools are dependency groups, for
+  `make install_dev`, an editable install that replaces `PYTHONPATH`.
+- Releases: `make release` checks and pushes `v<VERSION>`, and the release
+  workflow tests, builds the wheels, installs and checks each one on its
+  platform (`tools/check_wheel.py`), publishes them on PyPI by trusted
+  publishing, then makes a GitHub release whose notes are the `CHANGELOG.md`
+  section of the version. `make undorelease` deletes the tag until the
+  version reaches PyPI. Only wheels are published.
+- Versions: `tools/check_release.py` requires a canonical PEP 440 `VERSION`
+  later than every version on PyPI, a `CHANGELOG.md` section for it, and a
+  tag that matches it. Python 3.11 or newer, the versions CI tests.
+
+### #10 Run the engines in parallel, and stop at the first useful answer
+
+A portfolio mode: given a model and its targets, run BMC, k-induction,
+backward reachability and PDR at the same time, and stop all of them as soon
+as one gives a conclusive answer (a counterexample, or a proof), returning it
+together with which engine found it.
+
+The engines are complementary, so this is worth having: on the Kind2
+benchmarks BMC finds counterexamples fastest, while the proofs come from
+different engines for different models (PDR proves many that nothing else
+does, but backward reachability and k-induction still close some that PDR
+does not). A portfolio gets the best of each, as Kind2 does by default, and
+is also what #7 should compare against Kind2's portfolio.
+
+Things to get right:
+
+- isolation: one intrepid context, its z3 context and its net store are not
+  meant to be shared between threads; either each engine runs in its own
+  process, or in its own thread with its own context and a copy of the
+  circuit (z3 can translate terms between contexts);
+- stopping: the losers must be stopped promptly and cleanly, by killing the
+  process or interrupting z3 (`Z3_interrupt`) in their thread;
+- the result: the verdict, the engine, the time, and for a counterexample a
+  trace that belongs to the caller's context;
+- resources: how many engines run at once, on how many cores, with which
+  overall timeout and memory limit; which engines take part, and with which
+  settings (k-induction depth, int encoding for Lustre).
+
+To settle: whether this lives in intrepyd (python processes, simplest) or in
+intrepid's C API (threads, usable from C too). The AI engine of #9 could join
+the portfolio later, as one more participant.
+
+Done in `c7c016f`, in intrepyd, with processes; to be released in 0.14.0:
+
+- `Context.mk_portfolio(engines, max_depth)` returns `intrepyd.portfolio.
+  Portfolio`, an `Engine` that runs `bmc`, `kind`, `br` and `pdr` (all by
+  default), each in a process of its own, and returns the first conclusive
+  answer of `reach_targets(timeout)`, with `get_last_engine()`,
+  `get_last_time()` and `get_last_errors()`; the losers are terminated, and
+  a process also ends if its parent dies.
+- Isolation: each process builds the circuit again from the recipe of the
+  context (`intrepyd.recipe`): every `Context` records the calls that build
+  its circuit, with nets as references to the calls that made them, so the
+  same code works with forkserver on Linux and spawn on Windows, where there
+  is no fork. A circuit built through `intrepyd.api` directly cannot be
+  replayed, and the portfolio refuses it.
+- The counterexample is rebuilt in the caller's context by BMC at the depth
+  the winner found, when `get_last_trace()` first asks for it (a trace
+  cannot be copied value by value: intrepid crashes on `?` values, see #21
+  of intrepid's plan).
+- Also a `portfolio` engine kind of the REST service, and `pdr` and
+  `portfolio` tools of `benchmarks/run_one.py`.
+- On the Kind2 benchmarks, 10 second timeout, 8 portfolios at a time on 32
+  cores: 565 models of 848 with int32 and 797 with unbounded integers,
+  against 574 and 802 solved by at least one engine run alone; no
+  disagreement. The few lost were solved alone in 6 to 8 seconds. Each call
+  costs some 0.3 seconds more than the best engine alone, mostly to start the
+  process server (once per python process) and import intrepyd in it.

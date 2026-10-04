@@ -50,12 +50,9 @@ Changelog = "https://github.com/formalmethods/intrepyd/blob/main/CHANGELOG.md"
 #   pip install -e . --group dev
 # (pip 25.1 or newer). None of it is installed with intrepyd.
 [dependency-groups]
-# The REST service in app/ and intrepid.py, which is not part of the package
-rest = ["flask", "gunicorn"]
 lint = ["pylint"]
 release = ["build", "packaging"]
 dev = [
-    {include-group = "rest"},
     {include-group = "lint"},
     {include-group = "release"},
     "coverage",

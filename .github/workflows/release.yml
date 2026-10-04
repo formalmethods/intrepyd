@@ -7,40 +7,28 @@
 #      INTREPID_VERSION for it (nothing is compiled, so one runner builds all);
 #   4. installs each wheel on its platform, under the oldest and the newest
 #      python, and checks it with tools/check_wheel.py;
-#   5. builds the Docker image of the REST service from the linux wheel, runs
-#      it, and checks it with tools/check_image.py;
-#   6. publishes the wheels on PyPI, then the image on the GitHub container
-#      registry and on Docker Hub, tagged <VERSION> and, unless VERSION is a
-#      pre-release, latest;
-#   7. makes a GitHub release with the wheels and the CHANGELOG.md section
+#   5. publishes the wheels on PyPI;
+#   6. makes a GitHub release with the wheels and the CHANGELOG.md section
 #      as notes.
 #
-# Nothing is published unless every check succeeds: the image that is pushed
-# is the one that was tested, not a rebuild. No source distribution is
+# Nothing is published unless every check succeeds. No source distribution is
 # published: without the intrepid library, which is private, it could not be
 # installed.
+#
+# The Docker image of the REST service is released from its own repository,
+# formalmethods/intrepyd-server, which installs intrepyd from PyPI.
 #
 # Secrets and settings:
 #   - INTREPID_TOKEN, as for test.yml, to download the intrepid library;
 #   - PyPI uses trusted publishing, with no token: the intrepyd project on
 #     PyPI must trust this repository, this workflow (release.yml) and the
-#     GitHub environment "pypi", which must exist in the repository settings;
-#   - DOCKERHUB_USERNAME and DOCKERHUB_TOKEN, a Docker Hub user and an access
-#     token of it with write access to DOCKERHUB_IMAGE; they are checked
-#     before anything is published;
-#   - the GitHub container registry needs no secret: the workflow's own token
-#     pushes GHCR_IMAGE, provided this repository has write access to that
-#     package (it does when the workflow creates it).
+#     GitHub environment "pypi", which must exist in the repository settings.
 
 name: release
 
 on:
   push:
     tags: ['v*']
-
-env:
-  GHCR_IMAGE: ghcr.io/formalmethods/intrepyd
-  DOCKERHUB_IMAGE: docker.io/robertobruttomesso/intrepid
 
 jobs:
   test:
@@ -114,48 +102,8 @@ jobs:
       - name: Check the wheel
         run: python tools/check_wheel.py
 
-  image:
-    needs: wheels
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: wheels
-          path: dist
-
-      # Fails here, before anything is published, rather than after PyPI
-      - name: Check the Docker Hub credentials
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          test -n "$DOCKERHUB_USERNAME" && test -n "$DOCKERHUB_TOKEN" || \
-            { echo "::error::The DOCKERHUB_USERNAME and DOCKERHUB_TOKEN secrets are not set"; exit 1; }
-          echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
-          docker logout docker.io
-
-      - name: Build the image
-        run: docker build --build-arg VERSION="$(cat VERSION)" -t intrepyd:release .
-
-      - name: Check the image
-        run: |
-          docker run -d -p 8000:8000 --name intrepyd intrepyd:release
-          python3 tools/check_image.py http://127.0.0.1:8000 || { docker logs intrepyd; exit 1; }
-          docker rm -f intrepyd
-
-      - name: Save the image
-        run: docker save intrepyd:release | gzip > image.tar.gz
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: image
-          path: image.tar.gz
-          retention-days: 7
-
   pypi:
-    needs: [test, check-wheels, image]
+    needs: [test, check-wheels]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -170,48 +118,8 @@ jobs:
 
       - uses: pypa/gh-action-pypi-publish@release/v1
 
-  # After PyPI, which is the step that spends the version: an image is never
-  # published for a version that PyPI refused
-  docker:
-    needs: pypi
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: image
-
-      - name: Load the image
-        run: gunzip -c image.tar.gz | docker load
-
-      - name: Log in to the GitHub container registry
-        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: Log in to Docker Hub
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: echo "$DOCKERHUB_TOKEN" | docker login docker.io -u "$DOCKERHUB_USERNAME" --password-stdin
-
-      # latest only moves for final releases, X.Y.Z, not for pre-releases
-      - name: Push the image
-        run: |
-          version=$(cat VERSION)
-          tags="$version"
-          if echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then tags="$tags latest"; fi
-          for image in "$GHCR_IMAGE" "$DOCKERHUB_IMAGE"; do
-            for tag in $tags; do
-              docker tag intrepyd:release "$image:$tag"
-              docker push "$image:$tag"
-            done
-          done
-
   github-release:
-    needs: [pypi, docker]
+    needs: pypi
     runs-on: ubuntu-latest
     permissions:
       contents: write

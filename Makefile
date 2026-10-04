@@ -60,11 +60,11 @@ linter_python:
 	@$(PYTHON) -m pylint intrepyd
 
 tests_python:
-	@echo "# Testing intrepyd and apis"
+	@echo "# Testing intrepyd"
 	@$(PYTHON) -m unittest discover -v
 
 coverage_python:
-	@echo "# Testing intrepyd and apis"
+	@echo "# Testing intrepyd"
 	@$(PYTHON) -m coverage run -m unittest discover && \
 		$(PYTHON) -m coverage report && $(PYTHON) -m coverage html
 
@@ -97,8 +97,8 @@ wheels:
 
 # Tags the current commit as v$(VERSION) and pushes the tag, which starts the
 # release workflow, .github/workflows/release.yml: it tests, builds the wheels
-# of every platform and the Docker image, checks them, publishes the wheels on
-# PyPI and the image on ghcr.io and Docker Hub, and makes a GitHub release. The commit must already be on $(REMOTE)/$(BRANCH); VERSION must be
+# of every platform, checks them, publishes them on PyPI and makes a GitHub
+# release. The commit must already be on $(REMOTE)/$(BRANCH); VERSION must be
 # later than every version on PyPI, and have a section in CHANGELOG.md; the
 # intrepid release in INTREPID_VERSION must exist.
 release:

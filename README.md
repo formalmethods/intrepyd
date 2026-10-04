@@ -4,8 +4,8 @@ Intre**py**d is a **python** module that provides a simulator and a model checke
 a rich API, to allow the rapid prototyping of **formal methods** algorithms
 for the rigorous analysis of circuits, specifications, models.
 
-Intrepid may also be run as a containerized web service, which can be used interactively
-via a rich REST API.
+Intrepyd also runs as a web service, with a rich REST API, in a Docker image:
+see [intrepyd-server](https://github.com/formalmethods/intrepyd-server).
 
 # Index
 
@@ -46,8 +46,9 @@ Intrepyd is built in two layers:
   shared library, `libintrepid`, with a plain C API.
 - **intrepyd** — this python package. `intrepyd/api.py` loads `libintrepid`
   with `ctypes`; on top of it come a portfolio that runs the engines in
-  parallel, front-ends for Lustre and IEC 61131-3 Structured Text,
-  pandas-based traces, and a Flask REST service.
+  parallel, front-ends for Lustre and IEC 61131-3 Structured Text, and
+  pandas-based traces. Its REST service, with the Docker image, is a project
+  of its own, [intrepyd-server](https://github.com/formalmethods/intrepyd-server).
 
 Intrepyd itself is pure python: there is nothing to compile, and one build of
 the library serves every python version.
@@ -93,8 +94,8 @@ make
 with `sudo apt`, creates a virtualenv in `venv/`, and runs `make install_dev`
 in it. That installs intrepyd in editable mode, so the virtualenv imports it
 from the checkout, together with what developing it needs: the `dev`
-dependency group of `pyproject.toml` (the REST service, pylint, coverage, the
-release tools, matplotlib). In a virtualenv of your own, run
+dependency group of `pyproject.toml` (pylint, coverage, the release tools,
+matplotlib). In a virtualenv of your own, run
 `make install_dev` directly; it needs pip 25.1 or newer, and upgrades pip
 first.
 
@@ -144,7 +145,7 @@ Other useful targets:
 
 | Target                 | What it does                                                       |
 | ---------------------- | ------------------------------------------------------------------ |
-| `tests_python`         | Just the python tests (`intrepyd`, the binding and the REST API)    |
+| `tests_python`         | Just the python tests (`intrepyd` and the binding)                  |
 | `coverage_python`      | Python tests under coverage, HTML report into `htmlcov/`            |
 | `install_dev`          | Editable install of intrepyd, with the `dev` dependency group       |
 | `install_intrepyd`     | `pip install --user .`                                              |
@@ -483,6 +484,31 @@ from intrepyd.tools import translate_iec61131
 encoding = translate_iec61131('intrepyd/tests/openplc/simple1.xml', 'encoding')
 ```
 
+### Intrepid's own syntax
+
+`intrepyd.parser.Parser` reads circuits written in a line-based syntax, one
+net per line, `<name> = <operator> <arguments>`, and returns a populated
+`Context`:
+
+```
+i1 = input bool
+i2 = input bool
+a1 = and i1 i2
+l1 = latch bool
+set_latch_init_next l1 true false
+n0 = number 0 int8
+```
+
+```python
+from intrepyd.parser import Parser
+
+ctx = Parser().parse_file('model.txt')      # or parse_stream(stream)
+target = ctx.nets['a1']
+```
+
+A line that does not parse raises `intrepyd.parser.ParseError`, with the line
+number. The upload route of the REST service takes the same syntax.
+
 ## Benchmarking
 
 `benchmarks/run_one.py` runs a single Lustre benchmark under one engine, in a
@@ -522,115 +548,21 @@ kept in `benchmarks/results_5_seconds/`.
 
 ## Model Checking in the Cloud
 
-Intrepid also runs as a REST service. From a container, published with
-every release on the GitHub container registry and on Docker Hub:
+Intrepyd also runs as a REST service, served by gunicorn in a Docker image:
 
 ```
-docker run -p 8000:8000 ghcr.io/formalmethods/intrepyd
-docker run -p 8000:8000 robertobruttomesso/intrepid      # the same image
+docker run -p 8000:8000 ghcr.io/formalmethods/intrepyd-server
 ```
 
-Each image is tagged with the version of intrepyd it holds, e.g.
-`ghcr.io/formalmethods/intrepyd:0.13.0`, and `latest` is the last final
-release. It serves the API with gunicorn on port 8000.
-
-or, from a source checkout, in development mode:
-
-```
-./start_development_server.sh          # flask, port 5000
-```
-
-or in production mode, exactly as the container does:
-
-```
-gunicorn -b 0.0.0.0:8000 intrepid:app
-```
-
-All routes are under `/api/v1/`. A complete session — build `a AND b`, ask BMC
-to reach it, and read back the counterexample:
-
-```
-BASE=http://127.0.0.1:8000/api/v1
-
-curl -X POST $BASE/contexts/create -H 'Content-Type: application/json' \
-     -d '{"name":"demo"}'
-# {"result":"demo"}
-
-curl -X POST $BASE/inputs/create -H 'Content-Type: application/json' \
-     -d '{"context":"demo","type":"bool"}'
-# {"result":"__i0"}
-curl -X POST $BASE/inputs/create -H 'Content-Type: application/json' \
-     -d '{"context":"demo","type":"bool"}'
-# {"result":"__i1"}
-
-curl -X POST $BASE/nets/ands/create -H 'Content-Type: application/json' \
-     -d '{"context":"demo","x":"__i0","y":"__i1"}'
-# {"result":"__n10"}
-
-curl -X POST $BASE/engines/create -H 'Content-Type: application/json' \
-     -d '{"context":"demo","engine":"bmc"}'
-# {"result":"e0"}
-
-curl -X PUT $BASE/engines/addtarget -H 'Content-Type: application/json' \
-     -d '{"context":"demo","engine":"e0","net":"__n10"}'
-curl -X PUT $BASE/engines/setcurrentdepth -H 'Content-Type: application/json' \
-     -d '{"context":"demo","engine":"e0","depth":0}'
-curl -X PUT $BASE/engines/reachtargets -H 'Content-Type: application/json' \
-     -d '{"context":"demo","engine":"e0"}'
-# {"result":"reachable"}
-
-curl -X GET "$BASE/engines/lasttrace?context=demo&engine=e0"
-# {"result":"t0"}
-curl -X GET "$BASE/traces/values?context=demo&trace=t0"
-# {"result":{"__i0":["T"],"__i1":["T"]}}
-```
-
-Engine kinds are `bmc`, `optimizing_bmc`, `backward_reach`, `pdr` and `portfolio`. Nets are created
-under `/nets/<operator>s/create` (`ands`, `ors`, `nots`, `eqs`, `ites`,
-`numbers`, ...); binary operators take `x` and `y`, unary ones take `x`.
-
-Instead of issuing one request per net, you can `POST` a whole model to
-`/upload` and get a populated context back. It expects Intrepid's own
-line-based syntax, one net per line, `<name> = <operator> <arguments>`:
-
-```
-i1 = input bool
-i2 = input bool
-a1 = and i1 i2
-l1 = latch bool
-set_latch_init_next l1 true false
-n0 = number 0 int8
-```
-
-```
-curl -X POST $BASE/upload -F 'file=@model.txt'
-# {"result":{"ctx":"__ctx0"}}
-```
-
-The same syntax is available in-process through `intrepyd.parser.Parser`, with
-`parse_file()` and `parse_stream()`.
-
-The image installs the linux wheel of intrepyd, and copies the service next
-to it. To build and try it from a source checkout:
-
-```
-make -f Makefile.docker docker_test     # build the wheel and the image, run it, check it
-make -f Makefile.docker docker_run      # serve it on port 8000 (PORT=...)
-make -f Makefile.docker docker_stop
-```
-
-`docker_test` runs `tools/check_image.py` against the container, a short REST
-session with BMC, PDR and an uploaded model, which is also what a release
-checks before publishing the image.
+The service, its API and its image are a project of their own,
+[intrepyd-server](https://github.com/formalmethods/intrepyd-server), which
+installs intrepyd from PyPI and is released on its own schedule.
 
 ## Api Documentation
 
 The documentation for the python API can be found
-[here](https://github.com/formalmethods/intrepid/tree/master/docs/intrepyd),
+[here](https://github.com/formalmethods/intrepyd/tree/main/docs/intrepyd),
 and is regenerated with `make build_docs`.
-
-The documentation for the REST API can be found
-[here](https://www.postman.com/robertobruttomesso/workspace/intrepid-model-checker-rest-api).
 
 # Repository Layout
 
@@ -641,8 +573,6 @@ The documentation for the REST API can be found
 | `intrepyd/lustre2py/`   | Lustre front-end (ANTLR generated)                              |
 | `intrepyd/iec611312py/` | IEC 61131-3 Structured Text front-end                           |
 | `intrepyd/tests/`       | Python test suite                                               |
-| `app/`                  | Flask blueprints implementing the REST API                      |
-| `intrepid.py`           | REST service entry point (`intrepid:app`)                       |
 | `benchmarks/`           | Benchmark drivers and results                                   |
 | `fetch_intrepid.py`     | Puts the intrepid library into `intrepyd/`                      |
 | `pyproject.toml`        | Package metadata, dependencies and development dependency groups |
@@ -651,9 +581,7 @@ The documentation for the REST API can be found
 | `INTREPID_VERSION`      | The release of intrepid this version of intrepyd is built on    |
 | `CHANGELOG.md`          | The changes of each release, which become its release notes     |
 | `docs/pypi.md`          | The description shown on PyPI                                   |
-| `tools/`                | Release checks: `check_release.py`, `check_wheel.py`, `check_image.py` |
-| `Dockerfile`            | The image of the REST service, built from the linux wheel       |
-| `Makefile.docker`       | Builds, runs and checks the image locally                       |
+| `tools/`                | Release checks: `check_release.py`, `check_wheel.py`            |
 
 # Development
 
@@ -668,10 +596,8 @@ To move to a new release of intrepid, update `INTREPID_VERSION` and run
 the functions whose signature no longer matches; update the `_bind` lines in
 `api.py` to follow.
 
-The Docker image and CI use the library like everything else:
-`make -f Makefile.docker docker_build` builds the linux wheel first, which
-fetches it, and the GitHub workflow in `.github/workflows/test.yml` fetches it on every run, then
-lints and tests under several python versions, on Linux and Windows. Since
+The CI uses the library like everything else: the GitHub workflow in
+`.github/workflows/test.yml` fetches it on every run, then lints and tests under several python versions, on Linux and Windows. Since
 intrepid is private, the workflow needs a repository secret `INTREPID_TOKEN`:
 a fine-grained personal access token with read access to the contents of
 formalmethods/intrepid.
@@ -702,21 +628,14 @@ uses `gh`). Otherwise it tags the commit and pushes the tag, which starts
 4. each wheel installed on its platform, under python 3.11 and 3.13, and
    checked by `tools/check_wheel.py`: version, license files, contents, and
    every engine on a small model;
-5. the Docker image built from the linux wheel, run, and checked by
-   `tools/check_image.py`;
-6. the wheels published on PyPI;
-7. the image published, the very one that was checked, as
-   `ghcr.io/formalmethods/intrepyd` and `docker.io/robertobruttomesso/intrepid`,
-   tagged `<VERSION>` and, for a final release (`X.Y.Z`, not a pre-release),
-   `latest`;
-8. a GitHub release with the wheels and the `CHANGELOG.md` section.
+5. the wheels published on PyPI;
+6. a GitHub release with the wheels and the `CHANGELOG.md` section.
 
 Nothing is published unless every check succeeds. If the workflow fails
 before PyPI, fix the cause, run `make undorelease` to delete the tag, then
 commit, push and `make release` again; once the version is on PyPI,
-`make undorelease` refuses, and the fix needs a new version. If it fails
-after PyPI, on the image or the GitHub release, re-run the failed jobs from
-the GitHub Actions page.
+`make undorelease` refuses, and the fix needs a new version. If only the
+GitHub release fails, re-run it from the GitHub Actions page.
 
 PyPI accepts the wheels through trusted publishing, without a token. This is
 set up once, on PyPI, in the publishing settings of the intrepyd project: add
@@ -725,14 +644,8 @@ workflow `release.yml` and environment `pypi`; and, on GitHub, create the
 environment `pypi` in the settings of the repository (it can require a
 manual approval before each upload).
 
-The images need, in the secrets of the repository, `DOCKERHUB_USERNAME` and
-`DOCKERHUB_TOKEN`: a Docker Hub user and an access token of it with write
-access to `robertobruttomesso/intrepid`. The workflow checks them before
-publishing anything. The GitHub container registry needs no secret, as the
-workflow pushes with its own token; if the `intrepyd` package of the
-formalmethods organization already exists, from an earlier push by hand, give
-this repository write access to it in the package settings ("Manage Actions
-access").
+Once a release is on PyPI, intrepyd-server can move to it: its
+`requirements.txt` pins the version of intrepyd its image ships.
 
 # License
 
