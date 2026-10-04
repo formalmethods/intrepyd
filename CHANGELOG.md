@@ -13,7 +13,7 @@ one, and the section becomes the notes of the GitHub release.
   each process can build it again.
 - **Python 3.11 or newer.**
 - **The REST service and its Docker image have moved** to their own
-  repository, [intrepyd-server](https://github.com/formalmethods/intrepyd-server),
+  repository, [intrepid-server](https://github.com/formalmethods/intrepid-server),
   which installs intrepyd from PyPI; this repository is now only the python
   library.
 

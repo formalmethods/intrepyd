@@ -16,7 +16,7 @@
 # installed.
 #
 # The Docker image of the REST service is released from its own repository,
-# formalmethods/intrepyd-server, which installs intrepyd from PyPI.
+# formalmethods/intrepid-server, which installs intrepyd from PyPI.
 #
 # Secrets and settings:
 #   - INTREPID_TOKEN, as for test.yml, to download the intrepid library;

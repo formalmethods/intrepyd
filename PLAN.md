@@ -54,7 +54,7 @@ Rewrite it for people who use intrepyd or develop it:
   with each engine (what it can prove, how to read its results, when to pick
   it), and importing Lustre and IEC 61131-3 models, including the int
   encoding choice;
-- not the REST service, which moved to intrepyd-server with #5: its
+- not the REST service, which moved to intrepid-server with #5: its
   documentation belongs there, and this one links to it;
 - an API reference that is curated rather than dumped: the public classes
   and functions, with examples, and without the generated internals.
@@ -91,48 +91,6 @@ intrepid and intrepid-dependencies are separate repositories, and intrepid is
 private: what only concerns their internals belongs in their own
 documentation, and the intrepyd developer documentation links to it.
 
-### #5 Move the REST service and the Docker image to their own repository
-
-intrepyd also carries a web service: the Flask blueprints in `app/` and their
-tests, `intrepid.py`, `start_development_server.sh`, and the Docker image
-(`Dockerfile`, `Makefile.docker`, `docker/`, `.dockerignore`). The
-repository mixes two products with different users and release cycles.
-(`flask` and `gunicorn` are no longer install requirements of intrepyd since
-#6, but the `rest` dependency group of `pyproject.toml`, which goes away with
-the service.)
-
-Create a new repository for the service and its image, which depends on
-intrepyd as a package (a pinned version from PyPI, or a local checkout during
-development). intrepyd then stays a standalone project, focused on the python
-library: no Flask code, no Docker files, and no web dependencies.
-
-To settle along the way: the name of the new repository; where the REST API
-documentation lives (with the service, linked from #3); and how its CI gets
-intrepyd and the intrepid library.
-
-Status: implemented, not committed yet, in the new repository
-`../intrepyd-server` (for `formalmethods/intrepyd-server` on GitHub), made
-with the history of the files it takes from here (`git filter-repo`):
-
-- the service (`app/`, its tests, `intrepid.py`), the image (`Dockerfile`,
-  `docker/app.sh`, `.dockerignore`) and `tools/check_image.py`; the targets
-  of `Makefile.docker` and `start_development_server.sh` became targets of
-  its `Makefile` (`run`, `docker_build`, `docker_run`, `docker_test`);
-- its requirements are pinned in `requirements.txt`, `intrepyd==0.14.0`
-  first, from PyPI, whose wheels carry the intrepid library: it needs no
-  access to intrepid, and Dependabot proposes the updates;
-- its CI lints, tests, and builds and checks the image; its release, from
-  `make release` as here, publishes the image (#22) and a GitHub release;
-  it has its own version (1.0.0) and `CHANGELOG.md`;
-- the REST API documentation moved there, and the README here points to it.
-
-Here, the service, the image, the `rest` dependency group and the image jobs
-of the release workflow are gone; `intrepyd.parser`, which the upload route
-uses, stays, and its syntax is now documented in the README.
-
-Still to do: release intrepyd 0.14.0, which intrepyd-server pins (it brings
-the portfolio); then create the repository on GitHub, push, and release
-intrepyd-server 1.0.0.
 ### #7 Benchmark against Kind2 on the Lustre models, and optimize where we lose
 
 Measure intrepyd against Kind2, the reference model checker for Lustre, on the
@@ -236,15 +194,15 @@ it and which tags exist.
 This belongs with #5: if the service moves to its own repository first,
 this is done there, against the intrepyd wheels published on PyPI.
 
-Status: implemented, not committed yet, in intrepyd-server (#5). The
+Status: done in intrepid-server (`9ef7b70`, see #5), not released yet. The
 version of it that was here never published an image: intrepyd 0.13.0 was
 released before it.
 
 - Registries: only the GitHub container registry, now
-  `ghcr.io/formalmethods/intrepyd-server`, and Docker Hub,
+  `ghcr.io/formalmethods/intrepid-server`, and Docker Hub,
   `robertobruttomesso/intrepid`, the name users already pull; Heroku and AWS
   ECR are dropped, with their targets and the hardcoded account.
-- The release workflow of intrepyd-server checks the version and the Docker
+- The release workflow of intrepid-server checks the version and the Docker
   Hub credentials, builds the image from the pinned requirements, runs it
   and checks it with `tools/check_image.py` (a REST session with BMC, PDR
   and an uploaded model), then pushes that same image (saved, not rebuilt),
@@ -253,7 +211,7 @@ released before it.
   version of intrepyd it holds.
 
 Still to do before its first release: add the `DOCKERHUB_USERNAME` and
-`DOCKERHUB_TOKEN` secrets to intrepyd-server.
+`DOCKERHUB_TOKEN` secrets to intrepid-server.
 
 ## Done
 
@@ -266,6 +224,48 @@ invariants with z3's Spacer, and every proof it returns is certified (see
 #8). On the Kind2 benchmarks, with a 10 second timeout, it solves 520 models
 of 848 with int32 and 794 with unbounded integers, more than any other
 engine; together, the engines solve 574 and 802.
+
+### #5 Move the REST service and the Docker image to their own repository
+
+intrepyd also carries a web service: the Flask blueprints in `app/` and their
+tests, `intrepid.py`, `start_development_server.sh`, and the Docker image
+(`Dockerfile`, `Makefile.docker`, `docker/`, `.dockerignore`). The
+repository mixes two products with different users and release cycles.
+(`flask` and `gunicorn` are no longer install requirements of intrepyd since
+#6, but the `rest` dependency group of `pyproject.toml`, which goes away with
+the service.)
+
+Create a new repository for the service and its image, which depends on
+intrepyd as a package (a pinned version from PyPI, or a local checkout during
+development). intrepyd then stays a standalone project, focused on the python
+library: no Flask code, no Docker files, and no web dependencies.
+
+To settle along the way: the name of the new repository; where the REST API
+documentation lives (with the service, linked from #3); and how its CI gets
+intrepyd and the intrepid library.
+
+Done in `c2e326b` here and `9ef7b70` in the new repository,
+`formalmethods/intrepid-server` (named for the service, which any language
+can use, rather than for the python library it is built on), made with the
+history of the files it takes from here (`git filter-repo`):
+
+- the service (`app/`, its tests, `intrepid.py`), the image (`Dockerfile`,
+  `docker/app.sh`, `.dockerignore`) and `tools/check_image.py`; the targets
+  of `Makefile.docker` and `start_development_server.sh` became targets of
+  its `Makefile` (`run`, `docker_build`, `docker_run`, `docker_test`);
+- its requirements are pinned in `requirements.txt`, `intrepyd==0.14.0`
+  first, from PyPI, whose wheels carry the intrepid library: it needs no
+  access to intrepid, and Dependabot proposes the updates;
+- its CI lints, tests, and builds and checks the image; its release, from
+  `make release` as here, publishes the image (#22) and a GitHub release;
+  it has its own version (1.0.0) and `CHANGELOG.md`;
+- the REST API documentation moved there, and the README here points to it.
+
+Here, the service, the image, the `rest` dependency group and the image jobs
+of the release workflow are gone; `intrepyd.parser`, which the upload route
+uses, stays, and its syntax is now documented in the README.
+
+Its CI fails until intrepyd 0.14.0, which it pins, is on PyPI.
 
 ### #6 Review how the python library is packaged and released
 

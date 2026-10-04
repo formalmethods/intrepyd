@@ -5,7 +5,7 @@ a rich API, to allow the rapid prototyping of **formal methods** algorithms
 for the rigorous analysis of circuits, specifications, models.
 
 Intrepyd also runs as a web service, with a rich REST API, in a Docker image:
-see [intrepyd-server](https://github.com/formalmethods/intrepyd-server).
+see [intrepid-server](https://github.com/formalmethods/intrepid-server).
 
 # Index
 
@@ -48,7 +48,7 @@ Intrepyd is built in two layers:
   with `ctypes`; on top of it come a portfolio that runs the engines in
   parallel, front-ends for Lustre and IEC 61131-3 Structured Text, and
   pandas-based traces. Its REST service, with the Docker image, is a project
-  of its own, [intrepyd-server](https://github.com/formalmethods/intrepyd-server).
+  of its own, [intrepid-server](https://github.com/formalmethods/intrepid-server).
 
 Intrepyd itself is pure python: there is nothing to compile, and one build of
 the library serves every python version.
@@ -551,11 +551,11 @@ kept in `benchmarks/results_5_seconds/`.
 Intrepyd also runs as a REST service, served by gunicorn in a Docker image:
 
 ```
-docker run -p 8000:8000 ghcr.io/formalmethods/intrepyd-server
+docker run -p 8000:8000 ghcr.io/formalmethods/intrepid-server
 ```
 
 The service, its API and its image are a project of their own,
-[intrepyd-server](https://github.com/formalmethods/intrepyd-server), which
+[intrepid-server](https://github.com/formalmethods/intrepid-server), which
 installs intrepyd from PyPI and is released on its own schedule.
 
 ## Api Documentation
@@ -644,7 +644,7 @@ workflow `release.yml` and environment `pypi`; and, on GitHub, create the
 environment `pypi` in the settings of the repository (it can require a
 manual approval before each upload).
 
-Once a release is on PyPI, intrepyd-server can move to it: its
+Once a release is on PyPI, intrepid-server can move to it: its
 `requirements.txt` pins the version of intrepyd its image ships.
 
 # License
