@@ -2,8 +2,8 @@
 Implementation of REST API for upload
 """
 
+from io import TextIOWrapper
 from flask import Blueprint, request
-from werkzeug.utils import secure_filename
 from intrepyd.parser import ParseError, Parser
 from .contexts import contexts
 
@@ -15,12 +15,10 @@ def upload():
     Uploads and parses a file in intrepid syntax
     """
     file = request.files['file']
-    filename = secure_filename(file.filename)
-    filepath = '/tmp/' + filename
-    file.save(filepath)
     try:
         parser = Parser()
-        ctx = parser.parse_file(filepath)
+        with TextIOWrapper(file.stream, encoding='utf-8') as stream:
+            ctx = parser.parse_stream(stream)
         name = '__ctx{}'.format(len(contexts))
         contexts[name] = {'context': ctx,
                           'inputs': ctx.inputs,
