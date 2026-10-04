@@ -1,7 +1,7 @@
 import intrepid
 import unittest
 from intrepid import PREFIX
-import tempfile
+from io import BytesIO
 
 CTX_NAME = 'default'
 
@@ -15,15 +15,13 @@ class UploadTestCase(unittest.TestCase):
 
     def test_upload_simple(self):
         NAME = 'upload.itd'
-        f = tempfile.NamedTemporaryFile()
-        f.write(
+        f = BytesIO(
           b"""
           i1 = input bool
           n1 = not i1
           """
         )
-        data = {'file': (open(f.name, 'rb'), NAME)}
-        f.close()
+        data = {'file': (f, NAME)}
         response = self.client.post(PREFIX + 'upload', data=data)
         self.assertEqual(201, response.status_code)
         self.assertEqual({
@@ -34,14 +32,12 @@ class UploadTestCase(unittest.TestCase):
 
     def test_upload_error(self):
         NAME = 'upload.itd'
-        f = tempfile.NamedTemporaryFile()
-        f.write(
+        f = BytesIO(
           b"""
           a = add b c
           """
         )
-        data = {'file': (open(f.name, 'rb'), NAME)}
-        f.close()
+        data = {'file': (f, NAME)}
         response = self.client.post(PREFIX + 'upload', data=data)
         self.assertEqual(400, response.status_code)
         self.assertEqual({
@@ -50,15 +46,13 @@ class UploadTestCase(unittest.TestCase):
 
     def test_upload_and_add(self):
         NAME = 'upload.itd'
-        f = tempfile.NamedTemporaryFile()
-        f.write(
+        f = BytesIO(
           b"""
           i1 = input bool
           i2 = input bool
           """
         )
-        data = {'file': (open(f.name, 'rb'), NAME)}
-        f.close()
+        data = {'file': (f, NAME)}
         response = self.client.post(PREFIX + 'upload', data=data)
         self.assertEqual(201, response.status_code)
         self.assertEqual({
