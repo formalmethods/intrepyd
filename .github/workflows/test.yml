@@ -5,6 +5,8 @@
 # with the INTREPID_TOKEN secret, a fine-grained personal access token with
 # read access to the contents of formalmethods/intrepid. The workflow's own
 # GITHUB_TOKEN only reaches this repository, so it cannot be used.
+#
+# The release workflow runs it too, before publishing anything.
 
 name: test
 
@@ -12,6 +14,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 jobs:
   test:
@@ -31,9 +34,13 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
+          cache-dependency-path: pyproject.toml
 
-      - name: Install the requirements
-        run: pip install -r requirements.txt
+      # Dependency groups need pip 25.1 or newer
+      - name: Install intrepyd and the development requirements
+        run: |
+          python -m pip install --upgrade "pip>=25.1"
+          python -m pip install -e . --group dev
 
       - name: Fetch the intrepid library
         env:

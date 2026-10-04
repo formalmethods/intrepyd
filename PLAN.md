@@ -38,32 +38,6 @@ Note: the verdicts in `kind2-benchmarks.txt` follow 32 bit semantics; with
 `--int-type int`, some 15 to 18 instances (`ticket3i_*`, `durationThm_*`)
 rightly get a different verdict.
 
-### #2 IC3/PDR engine
-
-What remains unsolved on the benchmarks is mostly properties that need
-invariants: deep chains, with one state per level, that neither k-induction
-nor backward reachability can close. The natural next step is an IC3/PDR
-engine. z3 includes one, Spacer, available through its API for Constrained
-Horn Clauses: the system is described as
-
-    Inv(s)  <-  Init(s)
-    Inv(s') <-  Inv(s) /\ Trans(s, i, s')
-    false   <-  Inv(s) /\ Bad(s, i)
-
-and Spacer finds an inductive invariant, or a counterexample. It works well on
-linear arithmetic, so mostly with `inttype='int'`; it is weaker on
-bit-vectors.
-
-Status:
-
-- intrepid: done, released as v1.1.0 (`f0ee5b5`); see the plan of intrepid.
-  It adds the `Pdr` engine and the `mk_engine_pdr` / `pdr_*` C API; proofs
-  are certified (see #8).
-- intrepyd: implemented, not committed yet: `Context.mk_pdr()`, the
-  `engine.Pdr` class, the bindings in `api.py`, the `pdr` engine kind of the
-  REST service, tests and README, and `INTREPID_VERSION` moved to 1.1.0.
-  Once committed, this item is done.
-
 ### #3 Rewrite the documentation in `docs/`
 
 `docs/` is hard to use: it is the output of pdoc3 (`make build_docs`), one
@@ -120,10 +94,11 @@ documentation, and the intrepyd developer documentation links to it.
 
 intrepyd also carries a web service: the Flask blueprints in `app/` and their
 tests, `intrepid.py`, `start_development_server.sh`, and the Docker image
-(`Dockerfile`, `Makefile.docker`, `docker/`, `.dockerignore`). Because of it,
-`flask` and `gunicorn` are install requirements of intrepyd, so everyone who
-installs the library gets a web server too, and the repository mixes two
-products with different users and release cycles.
+(`Dockerfile`, `Makefile.docker`, `docker/`, `.dockerignore`). The
+repository mixes two products with different users and release cycles.
+(`flask` and `gunicorn` are no longer install requirements of intrepyd since
+#6, but the `rest` dependency group of `pyproject.toml`, which goes away with
+the service.)
 
 Create a new repository for the service and its image, which depends on
 intrepyd as a package (a pinned version from PyPI, or a local checkout during
@@ -154,6 +129,34 @@ The packaging grew by accretion and should be reviewed as a whole:
   python 3.9 only, with macOS wheels that will no longer be produced; decide
   what the first release of the new layout is called and what it says about
   the change.
+
+Status: implemented, not committed yet.
+
+- `pyproject.toml` holds the metadata, with a PEP 639 license expression
+  (`BSD-3-Clause AND LicenseRef-Intrepid AND MIT`) and the three license
+  files; `setup.py` only tags the wheels; `setup.cfg`, `MANIFEST.in` and
+  `requirements.txt` are gone. The wheel no longer installs `app/` as a top
+  level package, which it used to.
+- Runtime dependencies are only pandas and the antlr runtime; matplotlib is
+  the `plots` extra; Flask and gunicorn, pylint, coverage and the release
+  tools are dependency groups (`rest`, `lint`, `release`, `dev`), for
+  `make install_dev`, an editable install that replaces `PYTHONPATH`.
+- Releases: `make release` checks and pushes `v<VERSION>`, and
+  `.github/workflows/release.yml` tests, builds the wheels, installs and
+  checks each one on its platform (`tools/check_wheel.py`), publishes them on
+  PyPI by trusted publishing, then makes a GitHub release whose notes are the
+  `CHANGELOG.md` section of the version. `make undorelease` deletes the tag
+  until the version reaches PyPI. Only wheels are published: an sdist could
+  not be installed without the private intrepid library.
+- Versions: `tools/check_release.py` requires a canonical PEP 440 `VERSION`
+  later than every version on PyPI, a `CHANGELOG.md` section for it, and a
+  tag that matches it.
+- The first release of the new layout is 0.13.0 (0.12.0 is on PyPI already),
+  described in `CHANGELOG.md`.
+
+Still to do before the first release: on PyPI, add the trusted publisher
+(owner `formalmethods`, repository `intrepyd`, workflow `release.yml`,
+environment `pypi`); on GitHub, create the `pypi` environment.
 
 ### #7 Benchmark against Kind2 on the Lustre models, and optimize where we lose
 
@@ -256,3 +259,15 @@ Things to get right:
 To settle: whether this lives in intrepyd (python processes, simplest) or in
 intrepid's C API (threads, usable from C too). The AI engine of #9 could join
 the portfolio later, as one more participant.
+
+## Done
+
+### #2 IC3/PDR engine
+
+`Context.mk_pdr()`, the `engine.Pdr` class and the `pdr` engine kind of the
+REST service, on top of the `Pdr` engine of intrepid v1.1.0 (see the plan of
+intrepid), with tests and README (`8601eb5`). The engine finds inductive
+invariants with z3's Spacer, and every proof it returns is certified (see
+#8). On the Kind2 benchmarks, with a 10 second timeout, it solves 520 models
+of 848 with int32 and 794 with unbounded integers, more than any other
+engine; together, the engines solve 574 and 802.

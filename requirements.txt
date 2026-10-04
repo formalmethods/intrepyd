@@ -1,7 +1,0 @@
-pandas
-antlr4-python3-runtime==4.9.1
-flask
-gunicorn
-matplotlib
-pylint
-build

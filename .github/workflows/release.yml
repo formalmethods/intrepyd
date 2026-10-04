@@ -1,0 +1,138 @@
+# Releases intrepyd, on a tag v<VERSION> pushed by 'make release':
+#
+#   1. runs the tests of test.yml, on every platform and python version;
+#   2. checks that the tag matches VERSION, that PyPI has no such version or
+#      a later one, and that CHANGELOG.md has its section;
+#   3. builds the wheels of every platform, each with the intrepid library of
+#      INTREPID_VERSION for it (nothing is compiled, so one runner builds all);
+#   4. installs each wheel on its platform, under the oldest and the newest
+#      python, and checks it with tools/check_wheel.py;
+#   5. publishes the wheels on PyPI, then makes a GitHub release with them and
+#      the CHANGELOG.md section as notes.
+#
+# Nothing is published unless every earlier step succeeds. No source
+# distribution is published: without the intrepid library, which is private,
+# it could not be installed.
+#
+# Secrets and settings:
+#   - INTREPID_TOKEN, as for test.yml, to download the intrepid library;
+#   - PyPI uses trusted publishing, with no token: the intrepyd project on
+#     PyPI must trust this repository, this workflow (release.yml) and the
+#     GitHub environment "pypi", which must exist in the repository settings.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
+
+  wheels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install the release requirements
+        run: |
+          python -m pip install --upgrade "pip>=25.1"
+          python -m pip install --group release
+
+      - name: Check the version
+        run: python tools/check_release.py check --tag "$GITHUB_REF_NAME"
+
+      - name: Build the wheels
+        env:
+          GITHUB_TOKEN: ${{ secrets.INTREPID_TOKEN }}
+        run: make wheels PYTHON=python
+
+      - name: Write the release notes
+        run: python tools/check_release.py notes dist/NOTES.md
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: dist/*.whl
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: dist/NOTES.md
+
+  check-wheels:
+    needs: wheels
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ['3.9', '3.13']
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: dist
+
+      # pip picks the wheel of this platform among those in dist/; the
+      # dependencies come from PyPI
+      - name: Install the wheel
+        run: python -m pip install --only-binary intrepyd --find-links dist "intrepyd==$(cat VERSION)"
+
+      - name: Check the wheel
+        run: python tools/check_wheel.py
+
+  pypi:
+    needs: [test, check-wheels]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/intrepyd/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: dist
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" dist/*.whl
+          -R "$GITHUB_REPOSITORY" --title "intrepyd $GITHUB_REF_NAME"
+          --notes-file NOTES.md

@@ -25,6 +25,7 @@ via a rich REST API.
     1. [API documentation](#api-documentation)
 1. [Repository Layout](#repository-layout)
 1. [Development](#development)
+    1. [Releasing](#releasing)
 1. [License](#license)
 1. [Resources](#resources)
     1. [Formal Methods Little Corner](#formal-methods-little-corner)
@@ -69,7 +70,8 @@ pip install intrepyd
 ```
 
 Each wheel carries the intrepid library for its platform, so there is nothing
-else to install. If you want an isolated environment:
+else to install; `pip install intrepyd[plots]` also installs matplotlib, which
+`intrepyd.plots` needs. If you want an isolated environment:
 
 ```
 python3 -m venv venv
@@ -87,8 +89,13 @@ make
 ```
 
 `make bootstrap_linux` installs `make`, `git`, `python3-venv` and `python3-pip`
-with `sudo apt`, creates a virtualenv in `venv/`, and installs the python
-requirements into it.
+with `sudo apt`, creates a virtualenv in `venv/`, and runs `make install_dev`
+in it. That installs intrepyd in editable mode, so the virtualenv imports it
+from the checkout, together with what developing it needs: the `dev`
+dependency group of `pyproject.toml` (the REST service, pylint, coverage, the
+release tools, matplotlib). In a virtualenv of your own, run
+`make install_dev` directly; it needs pip 25.1 or newer, and upgrades pip
+first.
 
 Activating the virtualenv is optional for `make`: when `venv/` exists and no
 other virtualenv is active, every target uses `venv/bin/python`. Pass
@@ -138,14 +145,18 @@ Other useful targets:
 | ---------------------- | ------------------------------------------------------------------ |
 | `tests_python`         | Just the python tests (`intrepyd`, the binding and the REST API)    |
 | `coverage_python`      | Python tests under coverage, HTML report into `htmlcov/`            |
+| `install_dev`          | Editable install of intrepyd, with the `dev` dependency group       |
 | `install_intrepyd`     | `pip install --user .`                                              |
 | `wheel`                | A wheel for one platform into `dist/`, e.g. `make wheel PLATFORM=windows-x86_64` |
 | `wheels`               | The wheels of both platforms                                       |
-| `release_intrepyd_pip` | Builds all the wheels and uploads them to PyPI                      |
+| `release`              | Tags `v<VERSION>` and pushes it, which publishes the release (see [Releasing](#releasing)) |
+| `undorelease`          | Deletes the tag of a release whose CI failed, before it reaches PyPI |
 | `build_docs`           | Regenerates `docs/` with pdoc3                                      |
 
 All the wheels can be built on one machine, since nothing is compiled: each
-one is tagged `py3-none-<platform>` and holds that platform's library.
+one is tagged `py3-none-<platform>` and holds that platform's library. Wheels
+are all there is: no source distribution is published, since it could not be
+installed without the intrepid library, which is private.
 
 ## Troubleshooting
 
@@ -461,8 +472,9 @@ Plain `bmc` times out here because bounded model checking cannot prove a
 property, only refute it — which is what `bmc_ti` adds.
 
 The driver translates into an `encoding.py` in the current directory and runs
-the engine in a child process, so run it from a scratch directory and make sure
-the repository root is on `PYTHONPATH`.
+the engine in a child process, so run it from a scratch directory, with the
+python of a virtualenv where intrepyd is installed, such as the editable one
+of `make install_dev`.
 
 `benchmarks/kind2_benchmarks.py` runs the whole Kind2 benchmark suite listed in
 `benchmarks/kind2-benchmarks.txt`; sample output from a 5 second timeout run is
@@ -579,7 +591,13 @@ The documentation for the REST API can be found
 | `intrepid.py`           | REST service entry point (`intrepid:app`)                       |
 | `benchmarks/`           | Benchmark drivers and results                                   |
 | `fetch_intrepid.py`     | Puts the intrepid library into `intrepyd/`                      |
+| `pyproject.toml`        | Package metadata, dependencies and development dependency groups |
+| `setup.py`              | Tags each wheel for the platform of the library it holds        |
+| `VERSION`               | The version of intrepyd                                         |
 | `INTREPID_VERSION`      | The release of intrepid this version of intrepyd is built on    |
+| `CHANGELOG.md`          | The changes of each release, which become its release notes     |
+| `docs/pypi.md`          | The description shown on PyPI                                   |
+| `tools/`                | Release checks: `check_release.py`, `check_wheel.py`            |
 
 # Development
 
@@ -602,6 +620,47 @@ intrepid is private, the workflow needs a repository secret `INTREPID_TOKEN`:
 a fine-grained personal access token with read access to the contents of
 formalmethods/intrepid.
 
+## Releasing
+
+Releases are published by CI, from a tag `v<VERSION>`; nothing is uploaded by
+hand. To make one:
+
+1. Set `VERSION` to the new version: PyPI never accepts a version twice, so it
+   must be later than every version already there. Set `INTREPID_VERSION` to
+   the intrepid release to build on, if it changed.
+2. Add a `## <VERSION>` section to `CHANGELOG.md`, saying what changed for
+   users: it becomes the notes of the release.
+3. Commit, push to `main`, wait for the tests to pass, then run
+   `make release`.
+
+`make release` refuses if the working tree has uncommitted changes, if the
+branch is not `main` or is not pushed, if the tag already exists, if PyPI
+already has `VERSION` or a later version, if `CHANGELOG.md` has no section for
+it, or if the intrepid release in `INTREPID_VERSION` cannot be found (this
+uses `gh`). Otherwise it tags the commit and pushes the tag, which starts
+`.github/workflows/release.yml`:
+
+1. the tests of `test.yml`, on every platform and python version;
+2. the version checks again, against the tag;
+3. the wheels of both platforms, built with `make wheels`;
+4. each wheel installed on its platform, under python 3.9 and 3.13, and
+   checked by `tools/check_wheel.py`: version, license files, contents, and
+   every engine on a small model;
+5. the wheels published on PyPI, then a GitHub release with the wheels and
+   the `CHANGELOG.md` section.
+
+Nothing is published unless every earlier step succeeds. If the workflow
+fails before PyPI, fix the cause, run `make undorelease` to delete the tag,
+then commit, push and `make release` again; once the version is on PyPI,
+`make undorelease` refuses, and the fix needs a new version.
+
+PyPI accepts the wheels through trusted publishing, without a token. This is
+set up once, on PyPI, in the publishing settings of the intrepyd project: add
+a GitHub publisher with owner `formalmethods`, repository `intrepyd`,
+workflow `release.yml` and environment `pypi`; and, on GitHub, create the
+environment `pypi` in the settings of the repository (it can require a
+manual approval before each upload).
+
 # License
 
 Intrepyd is released under the BSD 3-Clause license, see
@@ -619,7 +678,7 @@ A collection of experiences using Intrepyd can be found
 ## Bug reporting
 
 Please report any bug you should experience
-[here](https://github.com/formalmethods/intrepid/issues).
+[here](https://github.com/formalmethods/intrepyd/issues).
 
 ## Feedback
 
