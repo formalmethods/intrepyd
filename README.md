@@ -45,8 +45,9 @@ Intrepyd is built in two layers:
   developed in a separate, private repository and comes here as a prebuilt
   shared library, `libintrepid`, with a plain C API.
 - **intrepyd** — this python package. `intrepyd/api.py` loads `libintrepid`
-  with `ctypes`; on top of it come front-ends for Lustre and IEC 61131-3
-  Structured Text, pandas-based traces, and a Flask REST service.
+  with `ctypes`; on top of it come a portfolio that runs the engines in
+  parallel, front-ends for Lustre and IEC 61131-3 Structured Text,
+  pandas-based traces, and a Flask REST service.
 
 Intrepyd itself is pure python: there is nothing to compile, and one build of
 the library serves every python version.
@@ -391,6 +392,43 @@ PDR is at its best on unbounded integers (`mk_int_type()`, or
 `inttype='int'` when translating Lustre); it also handles fixed width
 integers, but bit-vector invariants are harder to find.
 
+### Portfolio
+
+The engines are complementary: BMC finds counterexamples fastest, and
+k-induction, backward reachability and PDR each prove properties the others
+cannot. `mk_portfolio()` runs them all at the same time, and stops them as
+soon as one gives a conclusive answer:
+
+```python
+portfolio = ctx.mk_portfolio()          # or engines=('kind', 'pdr'), max_depth=50
+portfolio.add_target(bad)
+portfolio.add_watch(c)
+result = portfolio.reach_targets(timeout=60)
+print(result, portfolio.get_last_engine(), portfolio.get_last_time())
+if result == EngineResult.REACHABLE:
+    print(portfolio.get_last_trace().get_as_dataframe(ctx.net2name))
+```
+
+The engines are `bmc`, `kind` (k-induction), `br` (backward reachability)
+and `pdr`, all of them by default; `max_depth` bounds the depths that `bmc`
+and `kind` try, which are unbounded by default. `reach_targets()` returns the
+first `REACHABLE` or `UNREACHABLE` answer, or `UNKNOWN` if every engine gives
+up or `timeout` seconds pass first; `get_last_engine()` says which engine
+answered, and `get_last_errors()` reports the engines that failed.
+
+Each engine runs in a process of its own, so the portfolio uses as many
+cores as engines, and stopping the others is immediate. Each process builds
+the circuit again from the *recipe* of the context: every context records the
+calls that build its circuit, so a circuit must be built through the methods
+of `Context` (as the Lustre and Structured Text translators and the parser
+do), not through `intrepyd.api` directly. The counterexample of a
+`REACHABLE` answer is rebuilt in the caller's context, by BMC at the depth the
+engine found, the first time `get_last_trace()` is called.
+
+The processes are started with `multiprocessing`, which imports the main
+module of the program in each of them: a script that uses a portfolio must
+keep its top level code under `if __name__ == '__main__':`.
+
 ## Importing Models
 
 Rather than building circuits by hand, you can translate existing models. Both
@@ -454,9 +492,11 @@ separate process, with a timeout:
 python benchmarks/run_one.py <file.lus> <tool> [-t SECONDS] [--int-type int32|int]
 ```
 
-`<tool>` is `br` (backward reachability), `bmc`, or `bmc_ti` (BMC with
-k-induction); the default timeout is 60 seconds. It prints the verdict —
-`Valid`, `Invalid`, `Unknown`, `Timeout` or `Exception` — and the elapsed time.
+`<tool>` is `br` (backward reachability), `bmc`, `bmc_ti` (BMC with
+k-induction), `pdr`, or `portfolio` (all of them in parallel); the default
+timeout is 60 seconds. It prints the verdict — `Valid`, `Invalid`, `Unknown`,
+`Timeout` or `Exception` — and the elapsed time, followed, for `portfolio`, by
+the engine that gave the verdict.
 The benchmark expects the top node to be called `top` and to expose an `OK`
 output, which is the Kind2 convention.
 
@@ -545,7 +585,7 @@ curl -X GET "$BASE/traces/values?context=demo&trace=t0"
 # {"result":{"__i0":["T"],"__i1":["T"]}}
 ```
 
-Engine kinds are `bmc`, `optimizing_bmc`, `backward_reach` and `pdr`. Nets are created
+Engine kinds are `bmc`, `optimizing_bmc`, `backward_reach`, `pdr` and `portfolio`. Nets are created
 under `/nets/<operator>s/create` (`ands`, `ors`, `nots`, `eqs`, `ites`,
 `numbers`, ...); binary operators take `x` and `y`, unary ones take `x`.
 

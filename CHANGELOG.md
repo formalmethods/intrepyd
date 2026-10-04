@@ -18,6 +18,10 @@ The first release built on the new intrepid library, after four years.
 - **IC3/PDR engine:** `Context.mk_pdr()`, on top of Z3's Spacer. It proves
   many properties that k-induction and backward reachability cannot, and
   every proof it returns is checked.
+- **Portfolio:** `Context.mk_portfolio()` runs BMC, k-induction, backward
+  reachability and PDR in parallel, each in a process of its own, and
+  answers with the first of them to prove or refute the targets, saying
+  which; it is also an engine kind of the REST service.
 - **Faster engines:** bounded model checking, k-induction and backward
   reachability solve more of the Kind2 Lustre benchmarks, in less time.
 - **Unbounded integers for Lustre:** `translate_lustre(..., inttype='int')`

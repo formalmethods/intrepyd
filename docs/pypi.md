@@ -7,7 +7,8 @@ algorithms for the rigorous analysis of circuits, specifications and models.
 - Circuits of inputs, latches and combinational nets over booleans, bounded
   and unbounded integers, reals and floats.
 - A simulator, and four engines: bounded model checking, k-induction,
-  backward reachability and IC3/PDR, whose proofs are checked.
+  backward reachability and IC3/PDR, whose proofs are checked; a portfolio
+  runs them all in parallel, and answers with the first of them.
 - Front-ends for Lustre and IEC 61131-3 Structured Text (PLCopen XML).
 - Traces as pandas data frames.
 

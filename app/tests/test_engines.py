@@ -192,5 +192,34 @@ class EnginesTestCase(unittest.TestCase):
         self.assertEqual(200, response.status_code)
         self.assertEqual({'result': 'T'}, response.get_json())
 
+    def test_portfolio(self):
+        response = self.client.post(PREFIX + 'engines/create', \
+                                    json={
+                                      'context': CTX_NAME,
+                                      'engine': 'portfolio'
+                                    })
+        self.assertEqual(201, response.status_code)
+        self.assertEqual({'result': 'e0'}, response.get_json())
+        response = self.client.put(PREFIX + 'engines/addtarget', \
+                                    json={
+                                      'context': CTX_NAME,
+                                      'engine': 'e0',
+                                      'net': self.names['a_boolean']
+                                    })
+        self.assertEqual(200, response.status_code)
+        response = self.client.put(PREFIX + 'engines/reachtargets', \
+                                    json={
+                                      'context': CTX_NAME,
+                                      'engine': 'e0'
+                                    })
+        self.assertEqual(200, response.status_code)
+        self.assertEqual({'result': 'reachable'}, response.get_json())
+        response = self.client.get(PREFIX + 'engines/lastreachedtargets?context={}&engine=e0'.format(CTX_NAME))
+        self.assertEqual({'result': [self.names['a_boolean']]}, response.get_json())
+        response = self.client.get(PREFIX + 'engines/lasttrace?context={}&engine=e0'.format(CTX_NAME))
+        self.assertEqual({'result': 't0'}, response.get_json())
+        response = self.client.get(PREFIX + 'traces/values?context={}&trace=t0'.format(CTX_NAME))
+        self.assertEqual({'result': {'__i0': ['T']}}, response.get_json())
+
 if __name__ == '__main__':
     unittest.main()

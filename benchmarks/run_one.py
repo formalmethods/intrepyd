@@ -98,15 +98,68 @@ def worker_bmc_ti(q):
         result = 'Exception ' + str(e)
     q.put([result, time.time() - start])
 
+def worker_pdr(q):
+    """
+    Executes a translated benchmark
+    """
+    start = time.time()
+    try:
+        enc = _load_encoding()
+        ctx = intrepyd.context.Context()
+        circ = enc.mk_instance(ctx, 'pdr')
+        circ.mk_circuit()
+        pdr = ctx.mk_pdr()
+        pdr.add_target(ctx.mk_not(circ.outputs['OK']))
+        eng_result = pdr.reach_targets()
+        result = 'Unknown'
+        if eng_result == EngineResult.REACHABLE:
+            result = 'Invalid'
+        elif eng_result == EngineResult.UNREACHABLE:
+            result = 'Valid'
+    except Exception as exc:  # pylint: disable=broad-except
+        result = 'Exception ' + str(exc)
+    q.put([result, time.time() - start])
+
+def run_portfolio(timeout):
+    """
+    Runs every engine in parallel with a portfolio, which runs its own
+    processes and enforces the time limit itself; returns the verdict, the
+    time, and the engine that gave the verdict
+    """
+    start = time.time()
+    engine = None
+    try:
+        enc = _load_encoding()
+        ctx = intrepyd.context.Context()
+        circ = enc.mk_instance(ctx, 'portfolio')
+        circ.mk_circuit()
+        portfolio = ctx.mk_portfolio()
+        portfolio.add_target(ctx.mk_not(circ.outputs['OK']))
+        eng_result = portfolio.reach_targets(timeout=timeout)
+        engine = portfolio.get_last_engine()
+        if eng_result == EngineResult.REACHABLE:
+            result = 'Invalid'
+        elif eng_result == EngineResult.UNREACHABLE:
+            result = 'Valid'
+        elif time.time() - start >= timeout:
+            return 'Timeout', timeout, None
+        else:
+            result = 'Unknown'
+    except Exception as exc:  # pylint: disable=broad-except
+        result = 'Exception ' + str(exc)
+    return result, time.time() - start, engine
+
 def run_with_timeout(timeout, tool):
     """
     Runs a benchmark with a time limit
     """
-    if not tool in set(['br', 'bmc', 'bmc_ti']):
+    if not tool in set(['br', 'bmc', 'bmc_ti', 'pdr']):
         raise RuntimeError('Could not find specified tool')
     q = mp.Queue()
     if tool == 'br':
         proc = mp.Process(target=worker_br, args=(q,))
+    elif tool == 'pdr':
+        proc = mp.Process(target=worker_pdr, args=(q,))
     elif tool == 'bmc':
         proc = mp.Process(target=worker_bmc, args=(q,))
     elif tool == 'bmc_ti':
@@ -127,7 +180,8 @@ def run():
     argument_parser.add_argument('filepath', type=str,
                                  help='the file to run')
     argument_parser.add_argument('tool', type=str,
-                                 help='specifies the tool to be run (br, bmc, bmc_ti)')
+                                 help='specifies the tool to be run (br, bmc, bmc_ti, pdr, '
+                                      'portfolio)')
     argument_parser.add_argument('-t', '--timeout', type=int, default=60,
                                  help='specifies the timeout in seconds for each benchmark')
     argument_parser.add_argument('--int-type', default='int32', choices=translator.INT_TYPES,
@@ -139,8 +193,12 @@ def run():
         translator.translate(fname, 'top', 'encoding.py', 'real', parsed_args.int_type)
         time.sleep(1) # Give some extra time to write encoding.py to a file
         print('{} {}'.format(fname, parsed_args.tool), end='')
-        res, elapsed = run_with_timeout(parsed_args.timeout, parsed_args.tool)
-        print(' {} {}'.format(res, elapsed))
+        if parsed_args.tool == 'portfolio':
+            res, elapsed, engine = run_portfolio(parsed_args.timeout)
+            print(' {} {} {}'.format(res, elapsed, engine or '-'))
+        else:
+            res, elapsed = run_with_timeout(parsed_args.timeout, parsed_args.tool)
+            print(' {} {}'.format(res, elapsed))
     except IOError:
         print("File not accessible")
     finally:

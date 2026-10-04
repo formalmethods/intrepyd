@@ -50,6 +50,8 @@ def create_engine():
         eng = ctx.mk_backward_reach()
     elif engine == 'pdr':
         eng = ctx.mk_pdr()
+    elif engine == 'portfolio':
+        eng = ctx.mk_portfolio()
     else:
         return {'result': 'error: unknown engine {}'.format(engine)}, 400
     assert eng is not None

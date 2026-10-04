@@ -261,6 +261,33 @@ To settle: whether this lives in intrepyd (python processes, simplest) or in
 intrepid's C API (threads, usable from C too). The AI engine of #9 could join
 the portfolio later, as one more participant.
 
+Status: implemented, not committed yet, in intrepyd, with processes:
+
+- `Context.mk_portfolio(engines, max_depth)` returns `intrepyd.portfolio.
+  Portfolio`, an `Engine` that runs `bmc`, `kind`, `br` and `pdr` (all by
+  default), each in a process of its own, and returns the first conclusive
+  answer of `reach_targets(timeout)`, with `get_last_engine()`,
+  `get_last_time()` and `get_last_errors()`; the losers are terminated, and
+  a process also ends if its parent dies.
+- Isolation: each process builds the circuit again from the recipe of the
+  context (`intrepyd.recipe`): every `Context` records the calls that build
+  its circuit, with nets as references to the calls that made them, so the
+  same code works with forkserver on Linux and spawn on Windows, where there
+  is no fork. A circuit built through `intrepyd.api` directly cannot be
+  replayed, and the portfolio refuses it.
+- The counterexample is rebuilt in the caller's context by BMC at the depth
+  the winner found, when `get_last_trace()` first asks for it (a trace
+  cannot be copied value by value: intrepid crashes on `?` values, see #21
+  of intrepid's plan).
+- Also a `portfolio` engine kind of the REST service, and `pdr` and
+  `portfolio` tools of `benchmarks/run_one.py`.
+- On the Kind2 benchmarks, 10 second timeout, 8 portfolios at a time on 32
+  cores: 565 models of 848 with int32 and 797 with unbounded integers,
+  against 574 and 802 solved by at least one engine run alone; no
+  disagreement. The few lost were solved alone in 6 to 8 seconds. Each call
+  costs some 0.3 seconds more than the best engine alone, mostly to start the
+  process server (once per python process) and import intrepyd in it.
+
 ### #22 Review how the Docker image is published
 
 The Docker image of the REST service is still built and pushed by hand, from
