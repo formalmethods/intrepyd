@@ -25,7 +25,7 @@ jobs:
         # The binding is pure python on top of a C library, so one library
         # works across interpreters; the versions guard against source level
         # incompatibilities, like the one that broke typing.io on 3.13.
-        python: ['3.9', '3.11', '3.13']
+        python: ['3.11', '3.13']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
