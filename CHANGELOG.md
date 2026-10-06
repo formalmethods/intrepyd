@@ -4,6 +4,16 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.15.0
+
+- **Remote contexts:** after `intrepyd.use_remote(url)`, every `Context` is
+  a context on an [intrepid-server](https://github.com/formalmethods/intrepid-server)
+  (1.1.0 or newer), with the same methods, engines, traces and simulators
+  as a local one, so that a program runs unchanged against the service;
+  `use_local()` goes back. See `intrepyd.remote`.
+- `Context.pop_namespace()` with no namespace pushed raises, instead of
+  crashing the library.
+
 ## 0.14.0
 
 - **Portfolio:** `Context.mk_portfolio()` runs BMC, k-induction, backward

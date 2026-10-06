@@ -29,7 +29,7 @@ from intrepyd.api import mk_assumption, mk_undef, mk_true, mk_false, pop_assumpt
                          mk_latch, mk_substitute, set_latch_init_next,\
                          prepare_value_for_net, value_at
 
-from intrepyd import engine, trace, simulator, portfolio
+from intrepyd import engine, trace, simulator, portfolio, remote
 from intrepyd.recipe import Recipe
 
 def _recorded(method):
@@ -47,7 +47,15 @@ def _recorded(method):
 class Context:
     """
     An intrepyd context
+
+    After intrepyd.use_remote(url), Context() makes a RemoteContext on the
+    service at url instead (see intrepyd.remote)
     """
+    def __new__(cls, *args, **kwargs):
+        if cls is Context and remote.get_remote() is not None:
+            return remote.RemoteContext(remote.get_remote())
+        return super().__new__(cls)
+
     def __init__(self):
         self.ctx = mk_ctx()
         self.inputs = {}
@@ -92,9 +100,9 @@ class Context:
         """
         Pops a namespace
         """
-        pop_namespace(self.ctx)
         if len(self.namespaces) == 0:
             raise Exception('Cannot pop namespace, empty list')
+        pop_namespace(self.ctx)
         return self.namespaces.pop()
 
     def mk_boolean_type(self):

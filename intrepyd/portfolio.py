@@ -238,6 +238,10 @@ def _work(engine, circuit, targets, max_depth, sender):
     ('error', message)
     """
     _exit_with_parent()
+    # The engines run here, even if the process that started them imported a
+    # script that called use_remote()
+    from intrepyd.remote import use_local  # pylint: disable=import-outside-toplevel
+    use_local()
     try:
         context_class, calls = circuit
         context = context_class()
