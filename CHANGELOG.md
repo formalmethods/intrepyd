@@ -6,6 +6,12 @@ one, and the section becomes the notes of the GitHub release.
 
 ## 0.15.0
 
+- **New license:** intrepyd is now free for noncommercial purposes only
+  (personal use, universities, public research organizations), under the
+  PolyForm Noncommercial License 1.0.0; companies need a commercial license,
+  to be requested from roberto.bruttomesso@gmail.com. Earlier versions stay
+  under the BSD 3-Clause license. The intrepid library it bundles may be used
+  as part of intrepyd within the same terms.
 - **Remote contexts:** after `intrepyd.use_remote(url)`, every `Context` is
   a context on an [intrepid-server](https://github.com/formalmethods/intrepid-server)
   (1.1.0 or newer), with the same methods, engines, traces and simulators

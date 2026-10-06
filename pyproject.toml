@@ -13,10 +13,12 @@ description = "Simulator and model checkers for circuits, as a python API"
 readme = {file = "docs/pypi.md", content-type = "text/markdown"}
 authors = [{name = "Roberto Bruttomesso", email = "roberto.bruttomesso@gmail.com"}]
 maintainers = [{name = "Roberto Bruttomesso", email = "roberto.bruttomesso@gmail.com"}]
-# intrepyd itself is BSD; the intrepid library bundled in the wheels is
-# proprietary, and may be used freely as part of intrepyd; z3, linked into it,
-# is MIT (see CREDITS.md)
-license = "BSD-3-Clause AND LicenseRef-Intrepid AND MIT"
+# intrepyd itself is free for noncommercial purposes, under the PolyForm
+# Noncommercial License, and under a commercial license for anything else; the
+# intrepid library bundled in the wheels is proprietary, and may be used as
+# part of intrepyd within the terms of its license; z3, linked into it, is MIT
+# (see CREDITS.md)
+license = "PolyForm-Noncommercial-1.0.0 AND LicenseRef-Intrepid AND MIT"
 license-files = ["LICENSE.md", "CREDITS.md", "intrepyd/LICENSE.intrepid"]
 requires-python = ">=3.11"
 dependencies = [

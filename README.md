@@ -684,10 +684,20 @@ Once a release is on PyPI, intrepid-server can move to it: its
 
 # License
 
-Intrepyd is released under the BSD 3-Clause license, see
-[LICENSE.md](LICENSE.md). The intrepid library it bundles is proprietary; its
-license, installed as `intrepyd/LICENSE.intrepid`, allows it to be used and
-redistributed freely, unmodified, as part of intrepyd.
+Intrepyd is free for noncommercial purposes: personal use, and use by
+educational institutions, public research organizations and the other
+noncommercial organizations of the PolyForm Noncommercial License 1.0.0,
+under which it is released from version 0.15.0 on, see
+[LICENSE.md](LICENSE.md). Any other use, in particular by companies for a
+commercial purpose, requires a commercial license: write to
+`roberto.bruttomesso@gmail.com`. Versions up to 0.14.0 were released under
+the BSD 3-Clause license.
+
+The intrepid library it bundles is proprietary; its license, installed as
+`intrepyd/LICENSE.intrepid`, allows it to be used and redistributed,
+unmodified, as part of intrepyd, within the terms of the license of
+intrepyd: any commercial use of the library, with any version of intrepyd,
+needs a commercial license.
 
 # Resources
 
