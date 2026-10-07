@@ -47,7 +47,8 @@ Intrepyd is built in two layers:
 - **intrepyd** — this python package. `intrepyd/api.py` loads `libintrepid`
   with `ctypes`; on top of it come a portfolio that runs the engines in
   parallel, front-ends for Lustre and IEC 61131-3 Structured Text, and
-  pandas-based traces. Its REST service, with the Docker image, is a project
+  pandas-based traces. The front-end for Simulink models is a library of its
+  own too, closed source as intrepid is, which intrepyd loads when present. Its REST service, with the Docker image, is a project
   of its own, [intrepid-server](https://github.com/formalmethods/intrepid-server).
 
 Intrepyd itself is pure python: there is nothing to compile, and one build of
@@ -432,7 +433,7 @@ keep its top level code under `if __name__ == '__main__':`.
 
 ## Importing Models
 
-Rather than building circuits by hand, you can translate existing models. Both
+Rather than building circuits by hand, you can translate existing models. The
 translators emit a python module that you then import and instantiate.
 
 ### Lustre
@@ -483,6 +484,51 @@ from intrepyd.tools import translate_iec61131
 
 encoding = translate_iec61131('intrepyd/tests/openplc/simple1.xml', 'encoding')
 ```
+
+### Simulink
+
+```python
+import intrepyd as ip
+from intrepyd.tools import translate_simulink
+from intrepyd.engine import EngineResult
+
+encoding = translate_simulink('model.slx', 'encoding', variables={'limit': 'int32(10)'})
+
+ctx = ip.Context()
+circuit = encoding.mk_instance(ctx, 'model')
+circuit.mk_circuit()
+
+bmc = ctx.mk_bmc()
+for name, target in circuit.targets.items():  # one per Assertion block
+    bmc.add_target(target)
+print(bmc.reach_targets())
+```
+
+A `.mdl` or `.slx` model is read without MATLAB, with the models its Model
+blocks refer to. Its root Inport and Outport blocks are the inputs and
+outputs of the circuit; its targets are its Assertion blocks, each reached
+when its assertion fails, and the errors that would stop a simulation of its
+Stateflow charts: a division by zero, a state inconsistency, a conversion out
+of range. The MATLAB workspace the model needs is filled as Simulink fills
+it: by the callbacks of the model (`PreLoadFcn` and the others), with their
+`load` of MAT files, `Simulink.Bus` objects included, and the scripts they
+run; then by `mats=[...]`, MAT files, `scripts=[...]`, MATLAB scripts of
+assignments, and `variables`, MATLAB expressions; `callbacks=False` skips
+the callbacks. `realtype='real'` translates single and double as reals, not
+exact but much easier for the engines, instead of floats. What the
+translator does not support is refused with `intrepyd.simulink.SimulinkError`,
+listing each block that cannot be translated, never translated
+approximately.
+
+The translator is a closed source library, `libintrepid_simulink`, from the
+[intrepid-simulink](https://github.com/formalmethods/intrepid-simulink)
+repository; it is not bundled yet. To use a local build, point
+`INTREPID_SIMULINK_LIBRARY` at it. It translates discrete, single rate
+models made of the common blocks of arithmetic, logic, delays and routing
+(subsystems, Goto and From, Mux and Demux, buses, Model blocks), and
+Stateflow charts with the C action language and without events, in `.mdl`
+files; Stateflow charts in `.slx` files and MATLAB Function blocks are not
+supported yet.
 
 ### Intrepid's own syntax
 

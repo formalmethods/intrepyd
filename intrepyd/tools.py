@@ -8,6 +8,7 @@ import importlib
 from pandas import read_csv
 import intrepyd.lustre2py.translator as ltr
 import intrepyd.iec611312py.translator as itr
+import intrepyd.simulink as sml
 
 def translate_lustre(infilename, topnode, realtype, outmodule='encoding', inttype='int32'):
     """
@@ -19,6 +20,33 @@ def translate_lustre(infilename, topnode, realtype, outmodule='encoding', inttyp
     """
     outfilename = outmodule + '.py'
     ltr.translate(infilename, topnode, outfilename, realtype, inttype)
+    enc = importlib.import_module(outmodule)
+    return enc
+
+
+def translate_simulink(infilename, outmodule='encoding', realtype='float', variables=None,
+                       scripts=None, mats=None, callbacks=True):
+    """
+    Translates a Simulink model, a .mdl or a .slx file, into intrepyd syntax
+
+    The circuit of the module has the root Inport and Outport blocks of the
+    model as inputs and outputs, and as targets its Assertion blocks, reached
+    when an assertion fails, and the errors that would stop a simulation of
+    its Stateflow charts (a division by zero, a state inconsistency, a
+    conversion out of range). realtype is 'float' (single and double as
+    floats, exactly) or 'real' (as reals, which is not exact). The MATLAB
+    workspace the model refers to is filled by the callbacks of the model,
+    unless callbacks is False, then by the MAT files in mats, the MATLAB
+    scripts in scripts, and the variables, a dictionary of MATLAB
+    expressions. Raises intrepyd.simulink.SimulinkError, listing the blocks
+    that cannot be translated, if the model cannot be. Needs the Simulink
+    front-end library, see intrepyd.simulink.
+    """
+    python = sml.translate_file(infilename, realtype, variables, scripts, mats, callbacks)
+    outfilename = outmodule + '.py'
+    with open(outfilename, 'w', encoding='utf-8') as outfile:
+        outfile.write(python)
+    importlib.invalidate_caches()
     enc = importlib.import_module(outmodule)
     return enc
 
