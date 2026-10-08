@@ -509,7 +509,10 @@ blocks refer to. Its root Inport and Outport blocks are the inputs and
 outputs of the circuit; its targets are its Assertion blocks, each reached
 when its assertion fails, and the errors that would stop a simulation of its
 Stateflow charts: a division by zero, a state inconsistency, a conversion out
-of range. The MATLAB workspace the model needs is filled as Simulink fills
+of range. `circuit.nets` tells, for each state of each chart (named
+`block path:state path`), whether the state is active after the step, for
+coverage and for comparisons with Simulink. The MATLAB workspace the model
+needs is filled as Simulink fills
 it: by the callbacks of the model (`PreLoadFcn` and the others), with their
 `load` of MAT files, `Simulink.Bus` objects included, and the scripts they
 run; then by `mats=[...]`, MAT files, `scripts=[...]`, MATLAB scripts of
@@ -588,9 +591,44 @@ the engine in a child process, so run it from a scratch directory, with the
 python of a virtualenv where intrepyd is installed, such as the editable one
 of `make install_dev`.
 
-`benchmarks/kind2_benchmarks.py` runs the whole Kind2 benchmark suite listed in
-`benchmarks/kind2-benchmarks.txt`; sample output from a 5 second timeout run is
-kept in `benchmarks/results_5_seconds/`.
+`benchmarks/harness.py` runs the whole Kind2 benchmark suite listed in
+`benchmarks/kind2-benchmarks.txt`, with intrepyd's engines and with
+[Kind2](https://github.com/kind2-mc/kind2) itself, and reports and compares
+the runs:
+
+```
+python benchmarks/harness.py run OUT.jsonl [--tools bmc,kind,br,pdr,portfolio]
+    [--timeout 10] [--memory 4096] [--int-type int32|int] [--library PATH]
+    [--cpus 0-15] [--portfolio-cpus 4] [--filter REGEX]
+python benchmarks/harness.py report OUT.jsonl... [--expected benchmarks/kind2-benchmarks.txt]
+python benchmarks/harness.py compare A.jsonl B.jsonl
+```
+
+- `run` runs each file × tool pair in a process of its own, as many at a
+  time as there are cpus (by default one thread per physical core): a single
+  engine is bound to one cpu, a portfolio to `--portfolio-cpus`, and a run is
+  killed past its timeout or its memory limit. Results are appended to
+  `OUT.jsonl` one line each, and a run started again skips the pairs it has.
+  Each file is translated once per `--int-type` into `benchmarks/cache`;
+  `--library` chooses the `libintrepid` to load, to compare two builds.
+- The tools are intrepyd's `bmc`, `kind` (k-induction), `br`, `pdr` and
+  `portfolio`, and Kind2's `kind2` (its default portfolio), `kind2_bmc`,
+  `kind2_kind`, `kind2_ic3` and `kind2_ic3ia`. The Kind2 tools need the
+  `kind2` executable (`--kind2` or `$KIND2`) and a z3 executable for it
+  (`--z3` or `$KIND2_Z3`), at best the version that intrepid is built
+  with. Kind2 reads Lustre `int` as unbounded integers, so compare it with
+  `--int-type int`.
+- `report` gives, per tool, the models solved, the verdicts and the times;
+  the models where two tools disagree; the verdicts that contradict
+  `--expected` (whose verdicts follow 32 bit semantics); which engine
+  answered for each portfolio; and each intrepyd tool against its Kind2
+  counterpart: the models solved by one only, and those solved at least
+  twice as fast by one. Given several runs, it merges them, the later one
+  winning, so that the Kind2 tools need not run again for a new build of
+  intrepid. `compare` does the same for each tool of two runs.
+
+Results of a 5 second timeout run of 2021 are kept in
+`benchmarks/results_5_seconds/`.
 
 ## Model Checking in the Cloud
 

@@ -22,7 +22,8 @@ one, and the section becomes the notes of the GitHub release.
 - **Simulink:** `intrepyd.tools.translate_simulink()` translates a Simulink
   model, read without MATLAB, with its Stateflow charts, its bus objects and
   the models it refers to, into a circuit whose targets are its assertions
-  and the runtime errors of its charts. It needs the closed source library
+  and the runtime errors of its charts, and whose `nets` are the activity of
+  the states of its charts. It needs the closed source library
   of intrepid-simulink, which is not bundled yet:
   `INTREPID_SIMULINK_LIBRARY` points to a local build of it.
 

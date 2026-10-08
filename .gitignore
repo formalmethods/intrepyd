@@ -16,3 +16,6 @@ intrepyd/formula2py/Formula.interp
 intrepyd/libintrepid.so
 intrepyd/intrepid.dll
 intrepyd/LICENSE.intrepid
+
+# The encodings of benchmarks/harness.py
+benchmarks/cache
