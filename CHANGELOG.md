@@ -19,6 +19,9 @@ one, and the section becomes the notes of the GitHub release.
   `use_local()` goes back. See `intrepyd.remote`.
 - `Context.pop_namespace()` with no namespace pushed raises, instead of
   crashing the library.
+- `Trace.get_numeric_value()` reads the values of the next intrepid
+  release: reals as fractions (`1/3`), and the infinities and NaN of floats
+  (`inf`, `-inf`, `nan`).
 - **Simulink:** `intrepyd.tools.translate_simulink()` translates a Simulink
   model, read without MATLAB, with its Stateflow charts, its bus objects and
   the models it refers to, into a circuit whose targets are its assertions

@@ -12,6 +12,8 @@ Classes
 
     `get_numeric_value(value)`
     :   Converts a string value (including true, false) into a corresponding float or integer.
+        Reals that are not finite decimals come as fractions, n/d, and floats can be inf,
+        -inf and nan.
 
     ### Methods
 

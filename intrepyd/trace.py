@@ -2,6 +2,7 @@
 This module implements the class for traces
 """
 
+from fractions import Fraction
 from pandas import DataFrame
 from intrepyd.api import mk_trace, trace_get_max_depth, trace_get_watched_net, \
                          trace_prepare_value_for_net, trace_set_value, value_at, \
@@ -22,15 +23,19 @@ class Trace:
     def get_numeric_value(value):
         """
         Converts a string value (including true, false) into a corresponding float or integer.
+        Reals that are not finite decimals come as fractions, n/d, and floats can be inf,
+        -inf and nan.
         """
-        if '.' in value:
-            return float(value)
         if value == '?':
             return '?'
         if value == 'T':
             return 1
         if value == 'F':
             return 0
+        if '/' in value:
+            return float(Fraction(value))
+        if '.' in value or value in ('inf', '-inf', 'nan'):
+            return float(value)
         return int(value)
 
     def get_max_depth(self):

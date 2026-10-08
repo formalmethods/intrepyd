@@ -1,3 +1,4 @@
+import math
 import intrepyd
 import intrepyd.trace
 import unittest
@@ -44,6 +45,11 @@ class TestTrace(unittest.TestCase):
         self.assertEqual(5, nv(tr.get_value(i6, 0)))
         self.assertEqual(6, nv(tr.get_value(i7, 0)))
         self.assertEqual(7.0, nv(tr.get_value(i8, 0)))
+        self.assertEqual(-0.25, nv('-1/4'))
+        self.assertAlmostEqual(1 / 3, nv('1/3'))
+        self.assertEqual(float('-inf'), nv('-inf'))
+        self.assertTrue(math.isnan(nv('nan')))
+        self.assertEqual('?', nv('?'))
         df = tr.get_as_dataframe(ctx.net2name)
         self.assertEqual('F', df.iloc[0, 0])
         dd = tr.get_as_depth_dictionary()
