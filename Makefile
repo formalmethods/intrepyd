@@ -32,7 +32,7 @@ FETCH_ARGS=$(if $(INTREPID_DIR),--from $(INTREPID_DIR),) \
 
 .PHONY: all all_linters all_tests bootstrap_linux install_dev fetch_intrepid \
 	linter_python tests_python coverage_python install_intrepyd build_docs \
-	wheel wheels release undorelease
+	serve_docs wheel wheels release undorelease
 
 all: fetch_intrepid all_linters all_tests
 
@@ -73,11 +73,17 @@ install_intrepyd: fetch_intrepid
 	@echo "# Locally installing intrepyd"
 	@$(PYTHON) -m pip install --user .
 
+# The documentation site, built with MkDocs (see mkdocs.yml). The API
+# reference is generated from the sources by mkdocstrings, so the site stays in
+# sync with the code and nothing generated is committed. The 'docs' dependency
+# group installs what it needs (make install_dev, or pip install --group docs).
 build_docs:
-	@echo "# Generate docs"
-	@[ -d docs ] || mkdir docs
-	@$(PYTHON) -m pdoc3 -f -o docs intrepyd
-	@rm -fr docs/intrepyd/tests
+	@echo "# Build the documentation site into site/"
+	@$(PYTHON) -m mkdocs build --strict
+
+# Preview the site locally at http://127.0.0.1:8000, rebuilding on every change
+serve_docs:
+	@$(PYTHON) -m mkdocs serve
 
 # A wheel holds the library of one platform, and works with any python 3 on
 # it. Releases build them in CI (see release below); these targets are for

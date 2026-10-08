@@ -29,6 +29,14 @@ one, and the section becomes the notes of the GitHub release.
   the states of its charts. It needs the closed source library
   of intrepid-simulink, which is not bundled yet:
   `INTREPID_SIMULINK_LIBRARY` points to a local build of it.
+- **Documentation site:** the documentation is now a
+  [MkDocs](https://www.mkdocs.org/) site at
+  <https://formalmethods.github.io/intrepyd/>, with a guide from concepts to
+  tasks and an API reference generated from the docstrings by mkdocstrings. It
+  is deployed automatically on every push to `main`, so it stays in sync with
+  the code, and replaces the hand-committed pdoc3 output under `docs/`.
+  `make build_docs` builds it, `make serve_docs` previews it, and the new
+  `docs` dependency group installs what they need.
 
 ## 0.14.0
 

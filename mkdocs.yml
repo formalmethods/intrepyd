@@ -1,0 +1,123 @@
+site_name: Intrepyd
+site_description: A python simulator and model checker for the rigorous analysis of circuits, specifications and models.
+site_url: https://formalmethods.github.io/intrepyd/
+repo_name: formalmethods/intrepyd
+repo_url: https://github.com/formalmethods/intrepyd
+copyright: Copyright &copy; Roberto Bruttomesso
+docs_dir: docs
+
+# docs/pypi.md is the long description shipped to PyPI (pyproject readme),
+# not a page of this site.
+exclude_docs: |
+  pypi.md
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  icon:
+    repo: fontawesome/brands/github
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow the system theme
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Guide:
+      - Installation: guide/installation.md
+      - Building models: guide/building-models.md
+      - Simulating: guide/simulating.md
+      - Model checking: guide/model-checking.md
+      - Portfolio: guide/portfolio.md
+      - Importing models: guide/importing.md
+      - Benchmarking: guide/benchmarking.md
+      - Running as a service: guide/service.md
+  - API reference:
+      - Overview: reference/index.md
+      - Context: reference/context.md
+      - Engines: reference/engine.md
+      - Portfolio: reference/portfolio.md
+      - Circuit: reference/circuit.md
+      - Trace: reference/trace.md
+      - Simulator: reference/simulator.md
+      - Tools: reference/tools.md
+      - Parser: reference/parser.md
+      - Simulink: reference/simulink.md
+      - Remote: reference/remote.md
+      - Helpers: reference/helpers.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: null
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: false
+            show_if_no_docstring: false
+            members_order: source
+            separate_signature: true
+            signature_crossrefs: true
+            merge_init_into_class: true
+            filters:
+              - "!^_"
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/formalmethods/intrepyd
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/intrepyd/

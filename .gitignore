@@ -6,6 +6,8 @@ intrepyd.egg-info
 venv
 htmlcov
 .coverage
+# The documentation site built by 'make build_docs' / mkdocs
+site
 .DS_Store
 intrepyd/formula2py/FormulaLexer.tokens
 intrepyd/formula2py/FormulaLexer.interp

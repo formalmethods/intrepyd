@@ -44,6 +44,7 @@ plots = ["matplotlib"]
 
 [project.urls]
 Homepage = "https://github.com/formalmethods/intrepyd"
+Documentation = "https://formalmethods.github.io/intrepyd/"
 Source = "https://github.com/formalmethods/intrepyd"
 Issues = "https://github.com/formalmethods/intrepyd/issues"
 Changelog = "https://github.com/formalmethods/intrepyd/blob/main/CHANGELOG.md"
@@ -54,9 +55,16 @@ Changelog = "https://github.com/formalmethods/intrepyd/blob/main/CHANGELOG.md"
 [dependency-groups]
 lint = ["pylint"]
 release = ["build", "packaging"]
+# The documentation site (make build_docs / serve_docs, and the docs workflow).
+# mkdocstrings reads the sources statically, so this needs no intrepid library.
+docs = [
+    "mkdocs-material",
+    "mkdocstrings[python]",
+]
 dev = [
     {include-group = "lint"},
     {include-group = "release"},
+    {include-group = "docs"},
     "coverage",
     "matplotlib",
 ]

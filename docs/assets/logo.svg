@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Intrepyd">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b8def"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#g)"/>
+  <!-- circuit: inputs on the left feeding a node that proves a checkmark -->
+  <g fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 22 H26"/>
+    <path d="M14 42 H26"/>
+    <circle cx="12" cy="22" r="2.6" fill="#ffffff" stroke="none"/>
+    <circle cx="12" cy="42" r="2.6" fill="#ffffff" stroke="none"/>
+    <path d="M26 16 h10 a4 4 0 0 1 4 4 v24 a4 4 0 0 1 -4 4 H26 Z" fill="#ffffff" stroke="none" opacity="0.18"/>
+    <path d="M28 33 l7 7 l14 -16"/>
+  </g>
+</svg>
