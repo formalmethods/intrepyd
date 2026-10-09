@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import urllib.error
 import urllib.request
 import zipfile
 
@@ -69,18 +70,45 @@ def github_get(url, token, accept):
         return response.read()
 
 
+def asset_name(version, plat):
+    extension = '.zip' if plat.startswith('windows') else '.tar.gz'
+    return 'intrepid-%s-%s%s' % (version, plat, extension)
+
+
+def release_json(version, token):
+    """The release v<version> of intrepid, or exit with a clear error."""
+    release_url = 'https://api.github.com/repos/%s/releases/tags/v%s' % (REPOSITORY, version)
+    try:
+        return json.loads(github_get(release_url, token, 'application/vnd.github+json'))
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            sys.exit('Error: %s has no release v%s' % (REPOSITORY, version))
+        raise
+
+
+def check_available(version, plat):
+    """Exit non-zero unless intrepid v<version> is published with the package
+    for <plat>. Checks the metadata only, nothing is downloaded."""
+    token = github_token()
+    release = release_json(version, token)
+    name = asset_name(version, plat)
+    names = [asset['name'] for asset in release.get('assets', [])]
+    if name not in names:
+        sys.exit('Error: release v%s of %s has no %s; it has: %s'
+                 % (version, REPOSITORY, name, ', '.join(names) or 'no assets'))
+    print('# %s is available in %s v%s' % (name, REPOSITORY, version))
+
+
 def download(version, plat, cache_dir):
     """Downloads the release package, returns the path of the archive"""
-    extension = '.zip' if plat.startswith('windows') else '.tar.gz'
-    name = 'intrepid-%s-%s%s' % (version, plat, extension)
+    name = asset_name(version, plat)
     path = os.path.join(cache_dir, name)
     if os.path.isfile(path):
         print('# Using cached %s' % path)
         return path
     token = github_token()
-    release_url = 'https://api.github.com/repos/%s/releases/tags/v%s' % (REPOSITORY, version)
     print('# Downloading %s from %s v%s' % (name, REPOSITORY, version))
-    release = json.loads(github_get(release_url, token, 'application/vnd.github+json'))
+    release = release_json(version, token)
     assets = [asset for asset in release['assets'] if asset['name'] == name]
     if not assets:
         sys.exit('Error: release v%s of %s has no %s; it has: %s'
@@ -141,18 +169,27 @@ def main():
     parser.add_argument('--platform', default=current_platform(),
                         help='the platform to download for (default: %(default)s)')
     parser.add_argument('--version', help='the release to download (default: INTREPID_VERSION)')
+    parser.add_argument('--check', action='store_true',
+                        help='only check that the release and its package for the '
+                             'platform are published, without downloading anything')
     args = parser.parse_args()
 
     if args.platform.split('-')[0] not in LIBRARY_NAMES:
         sys.exit('Error: unsupported platform %s' % args.platform)
     cache_dir = os.path.join(HERE, '.intrepid')
 
+    def resolve_version():
+        if args.version:
+            return args.version
+        with open(os.path.join(HERE, 'INTREPID_VERSION')) as version_file:
+            return version_file.read().strip()
+
+    if args.check:
+        check_available(resolve_version(), args.platform)
+        return
+
     if args.source is None:
-        version = args.version
-        if version is None:
-            with open(os.path.join(HERE, 'INTREPID_VERSION')) as version_file:
-                version = version_file.read().strip()
-        source = extract(download(version, args.platform, cache_dir), cache_dir)
+        source = extract(download(resolve_version(), args.platform, cache_dir), cache_dir)
     elif os.path.isfile(args.source):
         source = extract(args.source, cache_dir)
     else:

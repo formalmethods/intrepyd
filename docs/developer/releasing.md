@@ -26,9 +26,12 @@ hand. To make one:
 `make release` refuses if the working tree has uncommitted changes, if the
 branch is not `main` or is not pushed, if the tag already exists, if PyPI
 already has `VERSION` or a later version, if `CHANGELOG.md` has no section for
-it, or if the intrepid release in `INTREPID_VERSION` cannot be found (it uses
-`gh`). Otherwise it tags the commit and pushes the tag, which starts
-`.github/workflows/release.yml`:
+it, or if the intrepid release in `INTREPID_VERSION` is not published with a
+package for every platform (`fetch_intrepid.py --check` for each, so the release
+workflow cannot tag and then fail downloading a library that is not there yet —
+for instance when the pin was bumped to an intrepid release that has not
+finished publishing). Otherwise it tags the commit and pushes the tag, which
+starts `.github/workflows/release.yml`:
 
 1. the tests of `test.yml`, on every platform and python version;
 2. the version checks again, against the tag;

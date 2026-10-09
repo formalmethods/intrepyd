@@ -23,6 +23,9 @@ INTREPID_DIR?=
 PLATFORM?=
 INTREPID_REPO=formalmethods/intrepid
 INTREPID_VERSION:=$(shell cat INTREPID_VERSION)
+# The platforms intrepyd builds wheels for, each needing an intrepid package of
+# INTREPID_VERSION; 'release' checks they are all published before tagging.
+PLATFORMS=linux-x86_64 windows-x86_64
 VERSION:=$(shell cat VERSION)
 # Where 'make release' pushes the tag v$(VERSION), and the branch it must be on
 REMOTE?=origin
@@ -96,7 +99,7 @@ wheel: fetch_intrepid
 
 wheels:
 	@rm -fr dist
-	@for platform in linux-x86_64 windows-x86_64; do \
+	@for platform in $(PLATFORMS); do \
 		$(MAKE) --no-print-directory wheel PLATFORM=$$platform || exit 1; \
 	done
 	@$(MAKE) --no-print-directory fetch_intrepid
@@ -105,16 +108,20 @@ wheels:
 # release workflow, .github/workflows/release.yml: it tests, builds the wheels
 # of every platform, checks them, publishes them on PyPI and makes a GitHub
 # release. The commit must already be on $(REMOTE)/$(BRANCH); VERSION must be
-# later than every version on PyPI, and have a section in CHANGELOG.md; the
-# intrepid release in INTREPID_VERSION must exist.
+# later than every version on PyPI, and have a section in CHANGELOG.md; and the
+# intrepid release in INTREPID_VERSION must be published with a package for
+# every platform, so the release workflow can fetch the library (it would
+# otherwise tag, then fail downloading a missing package).
 release:
 	@test -z "$$(git status --porcelain)" || \
 		{ echo "Error: the working tree has uncommitted changes"; exit 1; }
 	@test "$$(git rev-parse --abbrev-ref HEAD)" = "$(BRANCH)" || \
 		{ echo "Error: releases are made from $(BRANCH), not $$(git rev-parse --abbrev-ref HEAD)"; exit 1; }
 	@$(PYTHON) tools/check_release.py check
-	@gh release view "v$(INTREPID_VERSION)" -R $(INTREPID_REPO) --json tagName >/dev/null 2>&1 || \
-		{ echo "Error: cannot find release v$(INTREPID_VERSION) of $(INTREPID_REPO) (is gh installed and logged in?)"; exit 1; }
+	@for platform in $(PLATFORMS); do \
+		$(PYTHON) fetch_intrepid.py --check --platform $$platform || \
+			{ echo "Error: intrepid v$(INTREPID_VERSION) is not available for $$platform; release intrepid first, or fix INTREPID_VERSION"; exit 1; }; \
+	done
 	@git fetch --quiet --tags $(REMOTE) $(BRANCH) 2>/dev/null || \
 		{ echo "Error: cannot fetch $(BRANCH) from $(REMOTE): push it first"; exit 1; }
 	@test "$$(git rev-parse HEAD)" = "$$(git rev-parse $(REMOTE)/$(BRANCH))" || \
