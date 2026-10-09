@@ -1,11 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Intrepyd">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5b8def"/>
-      <stop offset="1" stop-color="#8b5cf6"/>
-    </linearGradient>
-  </defs>
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#g)"/>
-  <path d="M18 34 l9 9 l19 -22" fill="none" stroke="#ffffff" stroke-width="6"
-        stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="32 35 336 336" role="img" aria-label="intrepid">
+  <title>intrepid</title>
+  <!-- The intrepid symbol in its brand colours, for the browser tab. -->
+  <path fill="#001A3D" d="M48 64H100V188H296L340 236H100V344H48Z"/>
+  <path fill="#0055FF" d="M352 62V216L302 170H204Z"/>
 </svg>

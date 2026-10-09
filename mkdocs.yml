@@ -3,7 +3,7 @@ site_description: A python simulator and model checker for the rigorous analysis
 site_url: https://formalmethods.github.io/intrepyd/
 repo_name: formalmethods/intrepyd
 repo_url: https://github.com/formalmethods/intrepyd
-copyright: Copyright &copy; Roberto Bruttomesso
+copyright: Copyright &copy; <a href="https://robertobruttomesso.github.io/">Roberto Bruttomesso</a>
 docs_dir: docs
 
 # docs/pypi.md is the long description shipped to PyPI (pyproject readme),
