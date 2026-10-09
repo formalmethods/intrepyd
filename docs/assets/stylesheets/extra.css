@@ -1,6 +1,14 @@
-/* Navy-blue primary colour for the header and navigation bar.
-   Used by the palette entries with `primary: custom` in mkdocs.yml. */
-[data-md-color-primary="custom"] {
+/* Navy-blue brand primary for the header and navigation bar.
+
+   Keyed to the colour *scheme* (always "default" or "slate"), not to
+   `primary: custom`: the first palette entry in mkdocs.yml is the "follow the
+   system" one, which carries no primary, so the statically rendered page — what
+   a first-time visitor sees before any JavaScript resolves the palette — falls
+   back to Material's default (indigo) for `data-md-color-primary`. Overriding by
+   scheme applies the navy in that state too. This file loads after Material's
+   stylesheet, so with equal specificity it wins. */
+[data-md-color-scheme="default"],
+[data-md-color-scheme="slate"] {
   --md-primary-fg-color:        #16284d;
   --md-primary-fg-color--light: #2a3f6e;
   --md-primary-fg-color--dark:  #0d1a35;
@@ -8,14 +16,9 @@
   --md-primary-bg-color--light: #ffffffb3;
 }
 
-/* Keep the navy header in dark mode too, rather than the slate default. */
+/* In dark mode the default link colour (and the active navigation item) is the
+   primary, i.e. navy, which is unreadable on the dark background. Use a light
+   azure of the same blue family instead. */
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color:        #16284d;
-  --md-primary-fg-color--light: #2a3f6e;
-  --md-primary-fg-color--dark:  #0d1a35;
-
-  /* Links (and the active navigation item) default to the primary colour,
-     i.e. navy, which is unreadable on the dark background. Use a light azure
-     in dark mode instead; it keeps the blue family of the navy brand. */
   --md-typeset-a-color: #8ab4f8;
 }
