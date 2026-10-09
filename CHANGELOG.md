@@ -31,10 +31,12 @@ one, and the section becomes the notes of the GitHub release.
   `INTREPID_SIMULINK_LIBRARY` points to a local build of it.
 - **Documentation site:** the documentation is now a
   [MkDocs](https://www.mkdocs.org/) site at
-  <https://formalmethods.github.io/intrepyd/>, with a guide from concepts to
-  tasks and an API reference generated from the docstrings by mkdocstrings. It
-  is deployed automatically on every push to `main`, so it stays in sync with
-  the code, and replaces the hand-committed pdoc3 output under `docs/`.
+  <https://formalmethods.github.io/intrepyd/>, with a hands-on tutorial from a
+  first netlist to a translated model, a guide from concepts to tasks, an API
+  reference generated from the docstrings by mkdocstrings, and a developer guide
+  (architecture, debugging, testing, performance, releasing).
+  It is deployed automatically on every push to `main`, so it stays in sync
+  with the code, and replaces the hand-committed pdoc3 output under `docs/`.
   `make build_docs` builds it, `make serve_docs` previews it, and the new
   `docs` dependency group installs what they need.
 

@@ -19,7 +19,6 @@ see [intrepid-server](https://github.com/formalmethods/intrepid-server).
 1. [Documentation](#documentation)
 1. [Repository Layout](#repository-layout)
 1. [Development](#development)
-    1. [Releasing](#releasing)
 1. [License](#license)
 1. [Resources](#resources)
     1. [Formal Methods Little Corner](#formal-methods-little-corner)
@@ -146,7 +145,7 @@ Other useful targets:
 | `install_intrepyd`     | `pip install --user .`                                              |
 | `wheel`                | A wheel for one platform into `dist/`, e.g. `make wheel PLATFORM=windows-x86_64` |
 | `wheels`               | The wheels of both platforms                                       |
-| `release`              | Tags `v<VERSION>` and pushes it, which publishes the release (see [Releasing](#releasing)) |
+| `release`              | Tags `v<VERSION>` and pushes it, which publishes the release (see the developer guide) |
 | `undorelease`          | Deletes the tag of a release whose CI failed, before it reaches PyPI |
 | `build_docs`           | Builds the documentation site into `site/` with MkDocs             |
 | `serve_docs`           | Previews the documentation site locally, rebuilding on change      |
@@ -213,7 +212,8 @@ in the documentation.
 # Documentation
 
 The documentation lives at **<https://formalmethods.github.io/intrepyd/>**: a
-guide from concepts to tasks, and an API reference generated from the sources.
+hands-on tutorial from a first netlist to a translated model, a guide from
+concepts to tasks, and an API reference generated from the sources.
 It is built with [MkDocs](https://www.mkdocs.org/) (see `mkdocs.yml`) and
 published automatically by the `docs` workflow on every push to `main`, so it
 always matches the code; the API reference is produced from the docstrings by
@@ -242,73 +242,24 @@ builds it into `site/`. Both need the `docs` dependency group
 | `INTREPID_VERSION`      | The release of intrepid this version of intrepyd is built on    |
 | `CHANGELOG.md`          | The changes of each release, which become its release notes     |
 | `mkdocs.yml`            | Configuration of the documentation site                         |
-| `docs/`                 | Sources of the documentation site (guide and API reference)     |
+| `docs/`                 | Sources of the documentation site (tutorial, guide, API reference) |
 | `docs/pypi.md`          | The description shown on PyPI                                   |
 | `tools/`                | Release checks: `check_release.py`, `check_wheel.py`            |
 
 # Development
 
-`intrepyd/api.py` exposes each function of intrepid's C API, `Intrepid.h`,
-under the same name. Strings go in and come out as `str`, handles are opaque
-values (`None` for `NULL`), nets are ints, and an error reported by the library
-raises `RuntimeError`. The rest of intrepyd only talks to the library through
-this module.
+Working on intrepyd itself — how the python package sits on the C++ library,
+debugging a failure down into it, the test suite, measuring performance, and
+the release process of each repository — is covered in the **Developer guide**
+of the documentation site:
+<https://formalmethods.github.io/intrepyd/developer/architecture/>.
 
-To move to a new release of intrepid, update `INTREPID_VERSION` and run
-`make fetch_intrepid` and `make`. If the C API changed, `test_api.py` reports
-the functions whose signature no longer matches; update the `_bind` lines in
-`api.py` to follow.
-
-The CI uses the library like everything else: the GitHub workflow in
-`.github/workflows/test.yml` fetches it on every run, then lints and tests under several python versions, on Linux and Windows. Since
-intrepid is private, the workflow needs a repository secret `INTREPID_TOKEN`:
-a fine-grained personal access token with read access to the contents of
-formalmethods/intrepid.
-
-## Releasing
-
-Releases are published by CI, from a tag `v<VERSION>`; nothing is uploaded by
-hand. To make one:
-
-1. Set `VERSION` to the new version: PyPI never accepts a version twice, so it
-   must be later than every version already there. Set `INTREPID_VERSION` to
-   the intrepid release to build on, if it changed.
-2. Add a `## <VERSION>` section to `CHANGELOG.md`, saying what changed for
-   users: it becomes the notes of the release.
-3. Commit, push to `main`, wait for the tests to pass, then run
-   `make release`.
-
-`make release` refuses if the working tree has uncommitted changes, if the
-branch is not `main` or is not pushed, if the tag already exists, if PyPI
-already has `VERSION` or a later version, if `CHANGELOG.md` has no section for
-it, or if the intrepid release in `INTREPID_VERSION` cannot be found (this
-uses `gh`). Otherwise it tags the commit and pushes the tag, which starts
-`.github/workflows/release.yml`:
-
-1. the tests of `test.yml`, on every platform and python version;
-2. the version checks again, against the tag;
-3. the wheels of both platforms, built with `make wheels`;
-4. each wheel installed on its platform, under python 3.11 and 3.13, and
-   checked by `tools/check_wheel.py`: version, license files, contents, and
-   every engine on a small model;
-5. the wheels published on PyPI;
-6. a GitHub release with the wheels and the `CHANGELOG.md` section.
-
-Nothing is published unless every check succeeds. If the workflow fails
-before PyPI, fix the cause, run `make undorelease` to delete the tag, then
-commit, push and `make release` again; once the version is on PyPI,
-`make undorelease` refuses, and the fix needs a new version. If only the
-GitHub release fails, re-run it from the GitHub Actions page.
-
-PyPI accepts the wheels through trusted publishing, without a token. This is
-set up once, on PyPI, in the publishing settings of the intrepyd project: add
-a GitHub publisher with owner `formalmethods`, repository `intrepyd`,
-workflow `release.yml` and environment `pypi`; and, on GitHub, create the
-environment `pypi` in the settings of the repository (it can require a
-manual approval before each upload).
-
-Once a release is on PyPI, intrepid-server can move to it: its
-`requirements.txt` pins the version of intrepyd its image ships.
+In short: `intrepyd/api.py` binds intrepid's C API, `Intrepid.h`, with
+`ctypes`, and the rest of intrepyd talks to the library only through it; moving
+to a new intrepid release is `INTREPID_VERSION` plus `make fetch_intrepid && make`
+(with `test_api.py` reporting any signature that drifted); and releases are cut
+with `make release`, which tags `v<VERSION>` and lets CI build, check and
+publish the wheels. The guide has the details.
 
 # License
 

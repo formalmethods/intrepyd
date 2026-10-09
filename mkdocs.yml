@@ -53,6 +53,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Tutorial: tutorial/index.md
   - Guide:
       - Installation: guide/installation.md
       - Building models: guide/building-models.md
@@ -75,6 +76,12 @@ nav:
       - Simulink: reference/simulink.md
       - Remote: reference/remote.md
       - Helpers: reference/helpers.md
+  - Developer guide:
+      - Architecture: developer/architecture.md
+      - Debugging: developer/debugging.md
+      - Testing: developer/testing.md
+      - Performance: developer/performance.md
+      - Releasing: developer/releasing.md
 
 markdown_extensions:
   - admonition
