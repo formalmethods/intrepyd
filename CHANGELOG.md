@@ -4,6 +4,10 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.16.0
+
+- Bumped intrepid to 1.3.0
+
 ## 0.15.0
 
 - **New license:** intrepyd is now free for noncommercial purposes only
