@@ -54,6 +54,9 @@ Changelog = "https://github.com/formalmethods/intrepyd/blob/main/CHANGELOG.md"
 # (pip 25.1 or newer). None of it is installed with intrepyd.
 [dependency-groups]
 lint = ["pylint"]
+# Static type checking of the annotated public API (#29 of intrepid-specs).
+# mypy reads the sources statically, so this needs no intrepid library.
+typecheck = ["mypy"]
 release = ["build", "packaging"]
 # The documentation site (make build_docs / serve_docs, and the docs workflow).
 # mkdocstrings reads the sources statically, so this needs no intrepid library.
@@ -63,11 +66,30 @@ docs = [
 ]
 dev = [
     {include-group = "lint"},
+    {include-group = "typecheck"},
     {include-group = "release"},
     {include-group = "docs"},
     "coverage",
     "matplotlib",
 ]
+
+[tool.mypy]
+python_version = "3.11"
+# The modules whose public API is annotated so far (#29 of intrepid-specs);
+# the rest of the package is type-checked as it gets annotated. Imports into
+# unlisted modules are followed for types but their own errors are silenced,
+# and third-party packages without stubs (pandas, antlr) are not required.
+files = ["intrepyd/api.py", "intrepyd/context.py", "intrepyd/export.py"]
+follow_imports = "silent"
+ignore_missing_imports = true
+warn_redundant_casts = true
+
+# context.py is held to the strict bar: every def must be annotated. api.py is
+# the dynamic ctypes binding and export.py has a few deliberately untyped
+# helpers, so they are checked but not required to annotate every def.
+[[tool.mypy.overrides]]
+module = "intrepyd.context"
+disallow_untyped_defs = true
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}
@@ -78,5 +100,6 @@ exclude = ["intrepyd.tests", "intrepyd.tests.*"]
 
 [tool.setuptools.package-data]
 # fetch_intrepid.py puts the library of one platform there, and only that one
-# ends up in the wheel
-intrepyd = ["libintrepid.so", "intrepid.dll", "LICENSE.intrepid"]
+# ends up in the wheel; py.typed (PEP 561) tells type checkers the package
+# ships inline annotations
+intrepyd = ["libintrepid.so", "intrepid.dll", "LICENSE.intrepid", "py.typed"]

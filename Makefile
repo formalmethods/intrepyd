@@ -34,12 +34,12 @@ FETCH_ARGS=$(if $(INTREPID_DIR),--from $(INTREPID_DIR),) \
            $(if $(PLATFORM),--platform $(PLATFORM),)
 
 .PHONY: all all_linters all_tests bootstrap_linux install_dev fetch_intrepid \
-	linter_python tests_python coverage_python install_intrepyd build_docs \
-	serve_docs wheel wheels release undorelease
+	linter_python typecheck_python tests_python coverage_python install_intrepyd \
+	build_docs serve_docs wheel wheels release undorelease
 
 all: fetch_intrepid all_linters all_tests
 
-all_linters: linter_python
+all_linters: linter_python typecheck_python
 
 all_tests: tests_python
 
@@ -61,6 +61,12 @@ fetch_intrepid:
 # Fails if the score drops below fail-under in .pylintrc
 linter_python:
 	@$(PYTHON) -m pylint intrepyd
+
+# Static type checking of the annotated public API (#29 of intrepid-specs).
+# Needs no intrepid library: mypy reads the sources statically. The modules
+# it checks are configured under [tool.mypy] in pyproject.toml.
+typecheck_python:
+	@$(PYTHON) -m mypy
 
 tests_python:
 	@echo "# Testing intrepyd"

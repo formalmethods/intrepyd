@@ -23,9 +23,20 @@ which is where the packaged intrepyd ships it.
 import ctypes
 import os
 import sys
+from typing import NewType
 
 __all__ = ['INT_ENGINE_RESULT_UNKNOWN', 'INT_ENGINE_RESULT_REACHABLE',
-           'INT_ENGINE_RESULT_UNREACHABLE', 'FUNCTIONS', 'LIBRARY_PATH']
+           'INT_ENGINE_RESULT_UNREACHABLE', 'FUNCTIONS', 'LIBRARY_PATH',
+           'Net', 'Type']
+
+# The python-level types of the values this binding exchanges, for annotating
+# the API built on top of it (see intrepyd.context). A net is an unsigned
+# integer (Int_net); a type is an opaque handle to one of a context's types
+# (Int_type). Both are distinct NewTypes over int, so a type checker keeps them
+# apart and does not let either stand in for a plain int by accident. At runtime
+# they are just ints, which is what the library returns.
+Net = NewType('Net', int)
+Type = NewType('Type', int)
 
 # intrepid is built for Linux and Windows only
 if sys.platform == 'win32':
@@ -68,7 +79,7 @@ VOID = None
 # Every function of Intrepid.h, as name: (result type, argument types). It is
 # filled in by _bind, below, and checked against the header by
 # intrepyd/tests/test_api.py.
-FUNCTIONS = {}
+FUNCTIONS: dict[str, tuple] = {}
 
 _check_exception = _lib.check_exception
 _check_exception.restype = STR

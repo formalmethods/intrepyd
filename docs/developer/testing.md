@@ -36,15 +36,25 @@ the counterexample read back from the trace — checking the value, not only tha
 some trace came out. Keep a test self-contained and fast; the whole suite runs
 on every CI job, on Linux and Windows, under several python versions.
 
-## Linting and coverage
+## Linting, type checking and coverage
 
 ```bash
 make linter_python           # pylint, fails below the score in .pylintrc
+make typecheck_python        # mypy on the annotated public API
 make coverage_python         # the suite under coverage, HTML into htmlcov/
 ```
 
-`make all` runs the linter and the tests together, which is what CI
+`make all` runs the linters and the tests together, which is what CI
 (`.github/workflows/test.yml`) runs on every push and pull request.
+
+The public API carries type annotations, and the package ships a `py.typed`
+marker so editors and type checkers see them: a net is an `intrepyd.api.Net`
+and a type an `intrepyd.api.Type`, not an opaque `Any`. `make typecheck_python`
+runs mypy over the annotated modules, configured under `[tool.mypy]` in
+`pyproject.toml`; it reads the sources statically, so it needs no intrepid
+library. The modules are being annotated incrementally — add a module to the
+`files` list once its public surface is typed, and hold `intrepyd.context` to
+the strict bar (`disallow_untyped_defs`).
 
 ## The C++ suite
 

@@ -50,5 +50,8 @@ jobs:
       - name: Lint
         run: python -m pylint intrepyd
 
+      - name: Type-check
+        run: python -m mypy
+
       - name: Test
         run: python -m unittest discover -v
