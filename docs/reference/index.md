@@ -13,6 +13,8 @@ IEC 61131-3 front-ends, and other helpers) are left out.
 | [Circuit](circuit.md) | Base class for translated and hand-built models |
 | [Trace](trace.md) | Input and watched values over time |
 | [Simulator](simulator.md) | Propagates a trace through a circuit |
+| [Component library](library.md) | Reusable EDA and IEC 61131-3 PLC blocks |
+| [Test generation](atg.md) | MC/DC automated test generation |
 | [Tools](tools.md) | `translate_*` front-ends and `simulate` |
 | [Parser](parser.md) | Reads Intrepid's line-based syntax |
 | [Simulink](simulink.md) | Binding of the Simulink front-end library |

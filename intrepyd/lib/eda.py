@@ -274,3 +274,76 @@ class FlipFlopDE:
         mux = self._ctx.mk_ite(e, d, self.q)
         self._master.set_init_next(init, mux, self._ctx.mk_not(self._c))
         self._ctx.set_latch_init_next(self._slave, init, self.q)
+
+
+def mk_mux(ctx, sel, in0, in1, name=None):
+    """
+    A 2:1 multiplexer: returns ``in1`` when ``sel`` is true, else ``in0``.
+
+    Symbol::
+
+           __
+          |  \
+          | 1 |--- Q     Q = in1 if sel else in0
+    in1 --|   |
+          | 0 |
+    in0 --|__/
+            |
+    sel ----+
+
+    Args:
+        ctx: the context to use
+        sel: the boolean selector net
+        in0: the net selected when sel is false
+        in1: the net selected when sel is true
+        name: an optional name for the output net
+
+    Returns:
+        the output net
+    """
+    return ctx.mk_ite(sel, in1, in0, name=name)
+
+
+class ShiftRegister:
+    r"""
+    Shift register (SR)
+
+    A chain of ``length`` one-cycle registers: the output ``q`` is the input
+    ``d`` delayed by ``length`` cycles. ``stages[i]`` is the output of the
+    i-th register, so ``stages[0]`` is ``d`` delayed by one cycle and
+    ``stages[-1]`` is ``q``.
+
+    Diagram::
+
+          ____     ____           ____
+         |    |   |    |         |    |
+    D ---| L0 |---| L1 |-- ... --|Ln-1|--- Q
+         |____|   |____|         |____|
+    """
+    def __init__(self, ctx, name, t, length):
+        """
+        Args:
+            ctx: the context to use
+            name: the unique name
+            t: the type of the data shifted
+            length: the number of stages (must be >= 1)
+        """
+        if length < 1:
+            raise ValueError('a shift register needs at least one stage')
+        self._ctx = ctx
+        self._name = name
+        self.stages = [ctx.mk_latch(name + '_' + str(i), t) for i in range(length)]
+        self.q = self.stages[-1]
+
+    def set_init_next(self, init, d):
+        """
+        Closes the register chain.
+
+        Args:
+            init: the value every stage holds for its first cycles
+            d: the input signal shifted into the first stage
+        """
+        previous = d
+        for latch in self.stages:
+            self._ctx.set_latch_init_next(latch, init, previous)
+            previous = latch

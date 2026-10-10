@@ -1,5 +1,19 @@
 """
-This module implements a toolbox for Automated Test Generation
+Automated Test Generation for MC/DC (Modified Condition / Decision Coverage).
+
+MC/DC asks, for every **decision** (a boolean expression) and each of its
+**conditions** (the atomic boolean sub-expressions), for a pair of tests that
+show the condition *independently* flips the decision: the two tests differ in
+that one condition, agree on the others, and the decision differs between them.
+Such a pair is an *independence pair*, and the generated table collects one per
+condition.
+
+The circuit is given as a subclass of :class:`intrepyd.circuit.Circuit` (the
+same class the translators use). ``compute_mcdc`` builds it twice in the same
+context, as instances ``InstA`` and ``InstB`` under their own namespaces, and
+looks up the decision and condition nets by name in each instance's ``nets``
+dictionary — so the circuit must register, in ``self.nets``, every net named by
+``decisions``. See the documentation and ``tests/test_atg.py`` for an example.
 """
 
 import pandas as pd
@@ -7,28 +21,31 @@ from intrepyd.engine import EngineResult
 
 def compute_mcdc(context, class_, decisions, max_depth):
     """
-    Computes MC/DC tests in form of a table.
+    Computes MC/DC tests in the form of a table, one per decision.
 
     Args:
         context: the intrepyd context to use
-        class_ (class): a python class that defines the circuit
-        decisions (Dictionary): each key of the dictionary is the
-                    name of a decision, and the values are the
-                    corresponding conditions
+        class_ (class): a subclass of :class:`intrepyd.circuit.Circuit` that
+                    builds the circuit and registers every decision and
+                    condition net, by name, in ``self.nets``
+        decisions (Dictionary): maps each decision to its conditions, all by
+                    net name (the names used as keys in the circuit's ``nets``)::
 
-                { netName           : [netName, ...] }
-                  ^                    ^
-                  the decision         the list of conditions
+                { decisionName : [conditionName, ...] }
+
+        max_depth (int): the maximum BMC depth to search for each test
 
     Returns:
-        (Dictionary) the MC/DC tables, one per each decision
+        a triple ``(tables, independence_pairs, unreachable)``: the raw MC/DC
+        table per decision, the independence pair (two test indices) per
+        condition, and the conditions whose objective is unreachable
     """
 
-    # Fetches and duplicates the circuit
+    # Fetches and duplicates the circuit, each under its own namespace
     inst_a = class_(context, 'InstA')
     inst_b = class_(context, 'InstB')
-    inst_a.mk_circuit()
-    inst_b.mk_circuit()
+    inst_a.mk_circuit(put_namespace=True)
+    inst_b.mk_circuit(put_namespace=True)
 
     # Creates test objectives
     decision2testobjectives = {decision :\
@@ -63,17 +80,17 @@ def compute_mcdc_targets(context, inst_a, inst_b, decision, conditions):
     Returns:
         a map from targets to conditions for which target is an independence pair
     """
-    decision_a = inst_a.nets()[decision]
-    decision_b = inst_b.nets()[decision]
+    decision_a = inst_a.nets[decision]
+    decision_b = inst_b.nets[decision]
     decisiona_diff_decisionb = context.mk_neq(decision_a, decision_b)
 
     conditiona_neq_conditionb = []
     conditions_a = []
     conditions_b = []
     for condition in conditions:
-        condition_a = inst_a.nets()[condition]
+        condition_a = inst_a.nets[condition]
         conditions_a.append(condition_a)
-        condition_b = inst_b.nets()[condition]
+        condition_b = inst_b.nets[condition]
         conditions_b.append(condition_b)
         conditiona_neq_conditionb.append(context.mk_neq(condition_a, condition_b))
 
@@ -191,14 +208,15 @@ def compute_mcdc_tables(context, inst_a, inst_b, decision2traces, trace2conditio
     seen = {}
     for decision, traces in decision2traces.items():
         inst_a_conds_dec =\
-          [inst_a.nets()[cond] for cond in decisions[decision]] + [inst_a.nets()[decision]]
+          [inst_a.nets[cond] for cond in decisions[decision]] + [inst_a.nets[decision]]
         inst_a_testnets =\
-          list(inst_a.inputs().values()) + inst_a_conds_dec
+          list(inst_a.inputs.values()) + inst_a_conds_dec
         inst_b_conds_dec =\
-          [inst_b.nets()[cond] for cond in decisions[decision]] + [inst_b.nets()[decision]]
-        inst_b_testnets = list(inst_b.inputs().values()) + inst_b_conds_dec
-        header = decisions[decision]
-        header.append(decision)
+          [inst_b.nets[cond] for cond in decisions[decision]] + [inst_b.nets[decision]]
+        inst_b_testnets = list(inst_b.inputs.values()) + inst_b_conds_dec
+        # the header is the condition names plus the decision; build a new list
+        # so the caller's decisions dict is not mutated
+        header = list(decisions[decision]) + [decision]
         header_nets_a = set(inst_a_conds_dec)
         # Enable this to include inputs in the tests (but you need to add also names in headers)
         # header_nets_a = set(inst_a_testnets)

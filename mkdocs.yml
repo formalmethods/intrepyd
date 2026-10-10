@@ -72,6 +72,8 @@ nav:
       - Trace: reference/trace.md
       - Simulator: reference/simulator.md
       - Tools: reference/tools.md
+      - Component library: reference/library.md
+      - Test generation: reference/atg.md
       - Export: reference/export.md
       - Parser: reference/parser.md
       - Simulink: reference/simulink.md

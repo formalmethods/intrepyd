@@ -20,7 +20,8 @@ What the modules cover:
 | `test_portfolio.py` | the parallel portfolio |
 | `test_lustre.py`, `test_openplc.py`, `test_st*.py`, `test_simulink.py` | the front-ends |
 | `test_parser.py`, `test_formula_*.py` | the line-based syntax and the formula parser |
-| `test_scr.py`, `test_pseudoboolean.py`, `test_components.py`, `test_atg.py` | the helpers |
+| `test_lib_eda.py`, `test_lib_plc.py` | the component library |
+| `test_scr.py`, `test_pseudoboolean.py`, `test_atg.py` | the helpers and MC/DC |
 | `test_remote.py` | the REST client (skipped without a server) |
 
 Tests that need the closed-source Simulink library are skipped unless

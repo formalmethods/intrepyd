@@ -1,5 +1,5 @@
 import unittest
-from intrepyd.components.eda import mk_clock, Delay, FlipFlopD, FlipFlopDE
+from intrepyd.lib.eda import mk_clock, Delay, FlipFlopD, FlipFlopDE
 from intrepyd.engine import EngineResult
 from intrepyd.context import Context
 

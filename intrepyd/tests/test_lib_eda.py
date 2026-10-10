@@ -1,5 +1,6 @@
 import intrepyd as ip
-from intrepyd.components.eda import mk_clock, mk_counter, LatchD, Delay, FlipFlopD, FlipFlopDE
+from intrepyd.lib.eda import mk_clock, mk_counter, LatchD, Delay, FlipFlopD, FlipFlopDE,\
+                            mk_mux, ShiftRegister
 from intrepyd.engine import EngineResult
 import unittest
 
@@ -258,6 +259,50 @@ class TestComponents(unittest.TestCase):
         self.assertEqual('F', tr.get_value(i, 0))
         for j in range(11):
             self.assertEqual('F' if j % 2 == 0 else 'T', tr.get_value(clock, j))
+
+    def test_mux_selects_in1_when_true_in0_when_false(self):
+        ctx = ip.Context()
+        bt = ctx.mk_boolean_type()
+        sel = ctx.mk_input('sel', bt)
+        in0 = ctx.mk_input('in0', bt)
+        in1 = ctx.mk_input('in1', bt)
+        out = mk_mux(ctx, sel, in0, in1, 'out')
+        tr = ctx.mk_trace()
+        # (sel, in0, in1) -> expected out
+        rows = [('F', 'T', 'F'),   # sel false -> in0 = T
+                ('T', 'T', 'F'),   # sel true  -> in1 = F
+                ('F', 'F', 'T'),   # sel false -> in0 = F
+                ('T', 'F', 'T')]   # sel true  -> in1 = T
+        for t, (s, a, b) in enumerate(rows):
+            tr.set_value(sel, t, s)
+            tr.set_value(in0, t, a)
+            tr.set_value(in1, t, b)
+        simulator = ctx.mk_simulator()
+        simulator.add_watch(out)
+        simulator.simulate(tr, len(rows) - 1)
+        expected = ['T', 'F', 'F', 'T']
+        for t, exp in enumerate(expected):
+            self.assertEqual(exp, tr.get_value(out, t))
+
+    def test_shift_register_delays_by_its_length(self):
+        ctx = ip.Context()
+        bt = ctx.mk_boolean_type()
+        d = ctx.mk_input('d', bt)
+        sr = ShiftRegister(ctx, 'sr', bt, 3)
+        sr.set_init_next(ctx.mk_false(), d)
+        values = ['T', 'F', 'T', 'F', 'F', 'T']
+        tr = ctx.mk_trace()
+        for t, v in enumerate(values):
+            tr.set_value(d, t, v)
+        simulator = ctx.mk_simulator()
+        simulator.add_watch(sr.q)
+        simulator.simulate(tr, len(values) + 3)
+        # q is d delayed by 3 cycles; the first 3 cycles hold the init (F)
+        self.assertEqual('F', tr.get_value(sr.q, 0))
+        self.assertEqual('F', tr.get_value(sr.q, 1))
+        self.assertEqual('F', tr.get_value(sr.q, 2))
+        for t in range(len(values)):
+            self.assertEqual(values[t], tr.get_value(sr.q, t + 3))
 
 if __name__ == '__main__':
     unittest.main()
