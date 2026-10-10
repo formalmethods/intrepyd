@@ -41,6 +41,26 @@ from intrepyd.recipe import Recipe
 _P = ParamSpec('_P')
 _R = TypeVar('_R')
 
+# Type attribute of a Context -> its readable name, for type-error messages.
+_TYPE_NAMES = {
+    'booleantype': 'bool',
+    'int8type': 'int8', 'int16type': 'int16', 'int32type': 'int32', 'int64type': 'int64',
+    'uint8type': 'uint8', 'uint16type': 'uint16', 'uint32type': 'uint32', 'uint64type': 'uint64',
+    'realtype': 'real',
+    'float16type': 'float16', 'float32type': 'float32', 'float64type': 'float64',
+    'inttype': 'int',
+}
+
+
+class IntrepydTypeError(TypeError):
+    """
+    Raised by a Context's mk_* builder when it can see, from the types it
+    tracks, that an operand has the wrong type (e.g. a boolean operator applied
+    to an integer): a readable diagnosis in place of an internal solver error.
+    The check is conservative — it fires only when the operand types are known
+    and clearly incompatible, never rejecting a circuit the tracker is unsure of.
+    """
+
 
 class _Recordable(Protocol):  # pylint: disable=too-few-public-methods
     """What ``_recorded`` needs of the object it wraps a method of: a recipe to
@@ -103,6 +123,16 @@ class Context:
         self.false: Net = mk_false(self.ctx)
         self.namespaces: list[str] = []
         self.recipe = Recipe(self)
+        # The type of each net, as far as it can be tracked on the python side,
+        # for the sanity checks in the mk_* builders. Populated for inputs,
+        # latches, numbers, the predefined booleans, and the results whose type
+        # is certain; a net stays absent when its type is not known, and the
+        # checks skip it.
+        self._type_name_by_value: dict[Type, str] = {
+            getattr(self, attr): name for attr, name in _TYPE_NAMES.items()
+        }
+        self._net2type: dict[Net, Type] = {self.true: self.booleantype,
+                                          self.false: self.booleantype}
 
     def __del__(self) -> None:
         del_ctx(self.ctx)
@@ -234,140 +264,209 @@ class Context:
         """
         Creates a number from a value and a type
         """
-        return self._register(mk_number(self.ctx, value, type_), name)
+        net = self._register(mk_number(self.ctx, value, type_), name)
+        self._net2type[net] = type_
+        return net
 
     @_recorded
     def mk_not(self, x: Net, name: str | None = None) -> Net:
         """
         Creates the net !x
         """
-        return self._register(mk_not(self.ctx, x), name=name)
+        self._require_boolean('mk_not', x)
+        net = self._register(mk_not(self.ctx, x), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_and(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the net x && y
         """
-        return self._register(mk_and(self.ctx, x, y), name=name)
+        self._require_boolean('mk_and', x, y)
+        net = self._register(mk_and(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_or(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the net x || y
         """
-        return self._register(mk_or(self.ctx, x, y), name=name)
+        self._require_boolean('mk_or', x, y)
+        net = self._register(mk_or(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_xor(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the net x ^ y
         """
-        return self._register(mk_xor(self.ctx, x, y), name=name)
+        self._require_boolean('mk_xor', x, y)
+        net = self._register(mk_xor(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_implies(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the net x -> y
         """
-        return self._register(mk_or(self.ctx, mk_not(self.ctx, x), y), name=name)
+        self._require_boolean('mk_implies', x, y)
+        net = self._register(mk_or(self.ctx, mk_not(self.ctx, x), y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_iff(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the net x <-> y
         """
-        return self._register(mk_iff(self.ctx, x, y), name=name)
+        self._require_boolean('mk_iff', x, y)
+        net = self._register(mk_iff(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_eq(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the predicate x = y
         """
-        return self._register(mk_eq(self.ctx, x, y), name=name)
+        self._require_same('mk_eq', x, y)
+        net = self._register(mk_eq(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_leq(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the predicate x <= y
         """
-        return self._register(mk_leq(self.ctx, x, y), name=name)
+        self._require_numeric('mk_leq', x, y)
+        self._require_same('mk_leq', x, y)
+        net = self._register(mk_leq(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_lt(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the predicate x < y
         """
-        return self._register(mk_lt(self.ctx, x, y), name=name)
+        self._require_numeric('mk_lt', x, y)
+        self._require_same('mk_lt', x, y)
+        net = self._register(mk_lt(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_geq(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the predicate x >= y
         """
-        return self._register(mk_geq(self.ctx, x, y), name=name)
+        self._require_numeric('mk_geq', x, y)
+        self._require_same('mk_geq', x, y)
+        net = self._register(mk_geq(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_gt(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the predicate x > y
         """
-        return self._register(mk_gt(self.ctx, x, y), name=name)
+        self._require_numeric('mk_gt', x, y)
+        self._require_same('mk_gt', x, y)
+        net = self._register(mk_gt(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_neq(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the predicate x != y
         """
-        return self._register(mk_neq(self.ctx, x, y), name=name)
+        self._require_same('mk_neq', x, y)
+        net = self._register(mk_neq(self.ctx, x, y), name=name)
+        self._net2type[net] = self.booleantype
+        return net
 
     @_recorded
     def mk_add(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the term x + y
         """
-        return self._register(mk_add(self.ctx, x, y), name=name)
+        self._require_numeric('mk_add', x, y)
+        self._require_same('mk_add', x, y)
+        net = self._register(mk_add(self.ctx, x, y), name=name)
+        self._record_type(net, self._common_type(x, y))
+        return net
 
     @_recorded
     def mk_mul(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the term x * y
         """
-        return self._register(mk_mul(self.ctx, x, y), name=name)
+        self._require_numeric('mk_mul', x, y)
+        self._require_same('mk_mul', x, y)
+        net = self._register(mk_mul(self.ctx, x, y), name=name)
+        self._record_type(net, self._common_type(x, y))
+        return net
 
     @_recorded
     def mk_div(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the term x / y
         """
-        return self._register(mk_div(self.ctx, x, y), name=name)
+        self._require_numeric('mk_div', x, y)
+        self._require_same('mk_div', x, y)
+        net = self._register(mk_div(self.ctx, x, y), name=name)
+        self._record_type(net, self._common_type(x, y))
+        return net
 
     @_recorded
     def mk_mod(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the term x % y
         """
-        return self._register(mk_mod(self.ctx, x, y), name=name)
+        self._require_numeric('mk_mod', x, y)
+        self._require_same('mk_mod', x, y)
+        net = self._register(mk_mod(self.ctx, x, y), name=name)
+        self._record_type(net, self._common_type(x, y))
+        return net
 
     @_recorded
     def mk_sub(self, x: Net, y: Net, name: str | None = None) -> Net:
         """
         Creates the term x - y
         """
-        return self._register(mk_sub(self.ctx, x, y), name=name)
+        self._require_numeric('mk_sub', x, y)
+        self._require_same('mk_sub', x, y)
+        net = self._register(mk_sub(self.ctx, x, y), name=name)
+        self._record_type(net, self._common_type(x, y))
+        return net
 
     @_recorded
     def mk_minus(self, x: Net, name: str | None = None) -> Net:
         """
         Creates the term -x
         """
-        return self._register(mk_minus(self.ctx, x), name=name)
+        self._require_numeric('mk_minus', x)
+        net = self._register(mk_minus(self.ctx, x), name=name)
+        self._record_type(net, self._net2type.get(x))
+        return net
 
     @_recorded
     def mk_ite(self, i: Net, t: Net, e: Net, name: str | None = None) -> Net:
         """
         Creates the term ite(i, t, e)
         """
-        return self._register(mk_ite(self.ctx, i, t, e), name=name)
+        self._require_boolean('mk_ite', i)
+        self._require_same('mk_ite', t, e)
+        net = self._register(mk_ite(self.ctx, i, t, e), name=name)
+        self._record_type(net, self._common_type(t, e))
+        return net
 
     @_recorded
     def mk_input(self, name: str, type_: Type) -> Net:
@@ -389,7 +488,9 @@ class Context:
         """
         Creates a latch
         """
-        return self._register_latch(mk_latch(self.ctx, name, type_), name=name)
+        latch = self._register_latch(mk_latch(self.ctx, name, type_), name=name)
+        self._net2type[latch] = type_
+        return latch
 
     @_recorded
     def set_latch_init_next(self, latch: Net, init: Net, nex: Net) -> None:
@@ -577,7 +678,51 @@ class Context:
         rawnet = self._register(rawnet, name)
         self.inputs[name] = rawnet
         self.input2type[rawnet] = type_
+        self._net2type[rawnet] = type_
         return rawnet
+
+    # --- sanity checks of the mk_* builders (see IntrepydTypeError) -----------
+    # Each fires only when the operand types are known; the result type is
+    # recorded only when certain, so the tracker never holds a wrong type.
+
+    def _type_name(self, type_: Type) -> str:
+        return self._type_name_by_value.get(type_, 'an unknown type')
+
+    def _describe(self, net: Net) -> str:
+        name = self.net2name.get(net)
+        return f"'{name}'" if name is not None and not name.startswith('__') else f"net {net}"
+
+    def _require_boolean(self, op: str, *nets: Net) -> None:
+        for net in nets:
+            type_ = self._net2type.get(net)
+            if type_ is not None and type_ != self.booleantype:
+                raise IntrepydTypeError(
+                    f"{op} expects boolean operands, but {self._describe(net)} has type "
+                    f"{self._type_name(type_)}")
+
+    def _require_numeric(self, op: str, *nets: Net) -> None:
+        for net in nets:
+            if self._net2type.get(net) == self.booleantype:
+                raise IntrepydTypeError(
+                    f"{op} expects numeric operands, but {self._describe(net)} is boolean")
+
+    def _require_same(self, op: str, x: Net, y: Net) -> None:
+        tx, ty = self._net2type.get(x), self._net2type.get(y)
+        if tx is not None and ty is not None and tx != ty:
+            raise IntrepydTypeError(
+                f"{op} expects operands of the same type, but {self._describe(x)} has type "
+                f"{self._type_name(tx)} and {self._describe(y)} has type {self._type_name(ty)}")
+
+    def _common_type(self, *nets: Net) -> Type | None:
+        """The operands' type when they all share one known type, else None."""
+        types = {self._net2type.get(net) for net in nets}
+        types.discard(None)
+        return next(iter(types)) if len(types) == 1 else None
+
+    def _record_type(self, net: Net, type_: Type | None) -> None:
+        """Remember a result's type, but only when it is certain."""
+        if type_ is not None:
+            self._net2type[net] = type_
 
     def _register_latch(self, rawnet: Net, name: str) -> Net:
         rawnet = self._register(rawnet, name)

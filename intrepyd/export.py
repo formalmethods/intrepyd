@@ -9,13 +9,16 @@ operator and its fanin as references; names come from ``net2name`` and the
 outputs from ``context.outputs``. Nothing is read from the native library, so
 the export is pure python and works wherever a built ``Context`` does.
 
-JSON schema (``version`` 1)
+JSON schema (``version`` 2)
 ---------------------------
+
+Version 2 adds ``file``/``line`` to a node; version 1 is the same without them,
+and a reader should accept both.
 
 ::
 
     {
-      "version": 1,
+      "version": 2,
       "nodes": [
         {
           "id":    <int>,         # the net, unique in the graph; edges use it
@@ -28,6 +31,8 @@ JSON schema (``version`` 1)
           "value": <str>,         # for a const: "0", "true", "?", ... (else absent)
           "group": <str>,         # the namespace of the name, e.g. "Counter" for
                                   #   "Counter.q" (else absent)
+          "file":  <str>,         # the source file that built the net (else absent)
+          "line":  <int>,         # the line in "file" that built it (with "file")
           "output": true          # present only when the net is tagged an output
         }
       ],
@@ -43,6 +48,18 @@ A node is one net. Outputs are a flag on the net they tag, not separate nodes.
 ``const`` covers numbers and the predefined ``true``/``false``/``undef`` (whose
 value is ``"?"``). A fanin that was built outside the context appears as an
 ``external`` node with no detail, so the graph stays connected.
+
+If the program also builds a trace (a simulation or a counterexample), the graph
+carries it, so a viewer can overlay the values on the blocks over time::
+
+    "trace": {
+      "depth":  <int>,                     # number of steps, 0..depth-1
+      "values": { "<net id>": ["v@0", "v@1", ...], ... }  # watched nets only
+    }
+
+The values are the strings the trace holds ("5", "T"/"F" for booleans, "?" for
+unknown). Only the nets the trace watches are present. The field is absent when
+the program builds no usable trace.
 """
 
 import argparse
@@ -84,12 +101,19 @@ def to_graph(context):
     refs = recipe._refs  # pylint: disable=protected-access
     idx2net = {ref[1]: net for net, ref in refs.items() if ref[0] == "net"}
 
+    # The source location of the net each call produced (recipe.locations is
+    # aligned with recipe.calls by index), when the recipe recorded it.
+    locations = getattr(recipe, "locations", [])
+    net2loc = {idx2net[i]: locations[i]
+               for i in idx2net
+               if i < len(locations) and locations[i] is not None}
+
     attr_nets = {attr: getattr(context, attr) for attr in _PREDEFINED if hasattr(context, attr)}
     predefined = {net: attr for attr, net in attr_nets.items()}
     net2name = dict(getattr(context, "net2name", {}))
     output_nets = set(getattr(context, "outputs", {}).values())
 
-    return _build(recipe.calls, idx2net, attr_nets, predefined, net2name, output_nets)
+    return _build(recipe.calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc)
 
 
 def to_json(context, indent=2):
@@ -104,7 +128,30 @@ def dump(context, path, indent=2):
         handle.write("\n")
 
 
-def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets):
+def trace_payload(trace):
+    """A trace's watched nets as ``{"depth": n, "values": {str(net): [v@0, ...]}}``,
+    to overlay a simulation or counterexample on the graph (see the schema). The
+    values are the strings the trace holds; only the watched nets are present."""
+    values = {str(net): list(vals)
+              for net, vals in trace.get_as_net_dictionary().items()}
+    return {"depth": trace.get_max_depth(), "values": values}
+
+
+def _trace_for(context, traces):
+    """The last captured trace of ``context`` that carries watched values, or None."""
+    chosen = None
+    for trace in traces:
+        if getattr(trace, "ctx", None) != context.ctx:
+            continue
+        try:
+            if trace.get_max_depth() > 0 and trace.get_as_net_dictionary():
+                chosen = trace
+        except Exception:  # pylint: disable=broad-except  # a half-built trace is just skipped
+            continue
+    return chosen
+
+
+def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc):
     # pylint: disable=too-many-locals,too-many-statements  # one pass with a few local helpers
     nodes = {}
     edges = []
@@ -122,6 +169,9 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets):
             entry["value"] = value
         if name is not None and "." in name:
             entry["group"] = name.rsplit(".", 1)[0]
+        location = net2loc.get(net)
+        if location is not None:
+            entry["file"], entry["line"] = location[0], location[1]
         nodes[net] = entry
         return entry
 
@@ -189,7 +239,7 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets):
         ensure(net)
         nodes[net]["output"] = True
 
-    return {"version": 1,
+    return {"version": 2,
             "nodes": [nodes[net] for net in sorted(nodes)],
             "edges": edges}
 
@@ -210,29 +260,43 @@ def main(argv=None):
                         help="export every context built, as a JSON list")
     args = parser.parse_args(argv)
 
-    # Imported late, on purpose: it needs the native library, which neither the
+    # Imported late, on purpose: they need the native library, which neither the
     # exporter nor its tests require.
     from intrepyd import context as context_module  # pylint: disable=import-outside-toplevel
+    from intrepyd import trace as trace_module  # pylint: disable=import-outside-toplevel
 
     built = []
-    original_init = context_module.Context.__init__
+    traces = []
+    original_ctx_init = context_module.Context.__init__
+    original_trace_init = trace_module.Trace.__init__
 
-    def tracking_init(self, *a, **k):
-        original_init(self, *a, **k)
+    def tracking_ctx_init(self, *a, **k):
+        original_ctx_init(self, *a, **k)
         built.append(self)
 
-    context_module.Context.__init__ = tracking_init
+    def tracking_trace_init(self, *a, **k):
+        original_trace_init(self, *a, **k)
+        traces.append(self)
+
+    context_module.Context.__init__ = tracking_ctx_init
+    trace_module.Trace.__init__ = tracking_trace_init
     try:
         runpy.run_path(args.program, run_name="__main__")
     finally:
-        context_module.Context.__init__ = original_init
+        context_module.Context.__init__ = original_ctx_init
+        trace_module.Trace.__init__ = original_trace_init
 
     if not built:
         sys.exit(f"Error: {args.program} built no Context")
     if args.all:
         payload = json.dumps([to_graph(ctx) for ctx in built], indent=2)
     else:
-        payload = to_json(max(built, key=lambda ctx: len(ctx.net2name)))
+        chosen = max(built, key=lambda ctx: len(ctx.net2name))
+        graph = to_graph(chosen)
+        trace = _trace_for(chosen, traces)
+        if trace is not None:
+            graph["trace"] = trace_payload(trace)
+        payload = json.dumps(graph, indent=2)
 
     if args.out:
         with open(args.out, "w", encoding="utf-8") as handle:

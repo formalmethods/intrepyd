@@ -4,6 +4,23 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.19.0
+
+- Export schema version 2: each node carries the source `file` and `line` that
+  built the net (when the recipe recorded it), so a viewer can jump from a
+  block to the line of python that created it. Version 1 is the same without
+  them; readers should accept both.
+- Clearer errors from the circuit builders: `mk_*` now raise
+  `intrepyd.context.IntrepydTypeError` with a readable message when an operand
+  has the wrong type (e.g. a boolean operator on an integer, or a comparison of
+  two different types), instead of letting an internal solver sort-mismatch
+  surface. The check is conservative — it fires only when the operand types are
+  known and clearly incompatible, so it never rejects a valid circuit.
+- The export can carry a **trace**: when the program also builds a simulation or
+  a counterexample, `intrepyd.export` adds a `"trace"` with each watched net's
+  value at each step, so a viewer can overlay the values on the blocks over
+  time. Absent when no usable trace is built.
+
 ## 0.18.0
 
 - Exporting nets, ready to be rendered

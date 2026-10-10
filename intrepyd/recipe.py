@@ -11,11 +11,33 @@ predefined nets (true, false, undef) by name, so that replaying the calls in
 order rebuilds every net, with the same names.
 """
 
+import os
+import sys
+
 # The attributes of a Context that hold its types, and its predefined nets
 TYPE_ATTRIBUTES = ('booleantype', 'int8type', 'int16type', 'int32type', 'int64type',
                    'uint8type', 'uint16type', 'uint32type', 'uint64type', 'realtype',
                    'float16type', 'float32type', 'float64type', 'inttype')
 NET_ATTRIBUTES = ('undef', 'true', 'false')
+
+# This package's directory, to tell intrepyd's own frames from the user's when
+# finding where a net was built (see _caller_location).
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _caller_location():
+    """
+    The (file, line) of the nearest frame outside this package: the user code
+    that built the net, for tools that map a net back to its source (the export,
+    intrepyd.export). None if every frame is inside intrepyd.
+    """
+    frame = sys._getframe(1)  # pylint: disable=protected-access
+    while frame is not None:
+        filename = frame.f_code.co_filename
+        if not filename.startswith(_PACKAGE_DIR):
+            return (filename, frame.f_lineno)
+        frame = frame.f_back
+    return None
 
 
 class Recipe:
@@ -27,6 +49,10 @@ class Recipe:
         # (method name, arguments, keyword arguments), with every net and type
         # replaced by a reference
         self.calls = []
+        # The (file, line) where each call in self.calls was made, aligned by
+        # index; None where it could not be found. Used by the export to map a
+        # net to the line of source that built it; ignored by replay().
+        self.locations = []
         self._refs = {net: ('attr', name)
                       for name in NET_ATTRIBUTES
                       for net in [getattr(context, name)]}
@@ -45,6 +71,7 @@ class Recipe:
         self.calls.append((name,
                            tuple(self._reference(arg) for arg in args),
                            {key: self._reference(value) for key, value in kwargs.items()}))
+        self.locations.append(_caller_location())
         if isinstance(result, int):
             self._refs[result] = ('net', len(self.calls) - 1)
 

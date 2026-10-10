@@ -31,9 +31,10 @@ export = _load_export()
 
 
 class _Recipe:
-    def __init__(self, calls, refs):
+    def __init__(self, calls, refs, locations=None):
         self.calls = calls
         self._refs = refs
+        self.locations = locations or []
 
 
 class _FakeContext:
@@ -44,11 +45,11 @@ class _FakeContext:
               "uint8type", "uint16type", "uint32type", "uint64type", "realtype",
               "float16type", "float32type", "float64type", "inttype")
 
-    def __init__(self, calls, refs, net2name, outputs):
+    def __init__(self, calls, refs, net2name, outputs, locations=None):
         for i, attr in enumerate(self._TYPES):
             setattr(self, attr, 10 + i)
         self.true, self.false, self.undef = 1, 2, 3
-        self.recipe = _Recipe(calls, refs)
+        self.recipe = _Recipe(calls, refs, locations)
         self.net2name = net2name
         self.outputs = outputs
 
@@ -82,8 +83,14 @@ class ExportTest(unittest.TestCase):
         self.edges = self.graph["edges"]
 
     def test_version_and_node_set(self):
-        self.assertEqual(self.graph["version"], 1)
+        self.assertEqual(self.graph["version"], 2)
         self.assertEqual(set(self.nodes), {101, 102, 103, 201, 202, 203, 204})
+
+    def test_no_source_location_without_recipe_locations(self):
+        # the and-counter context records no locations: no file/line on any node
+        for node in self.nodes.values():
+            self.assertNotIn("file", node)
+            self.assertNotIn("line", node)
 
     def test_inputs(self):
         self.assertEqual(self.nodes[101]["kind"], "input")
@@ -145,6 +152,64 @@ class ExportTest(unittest.TestCase):
         node = export.to_graph(ctx)["nodes"][0]
         self.assertEqual(node["name"], "Counter.q")
         self.assertEqual(node["group"], "Counter")
+
+    def test_source_location_is_carried_to_the_node(self):
+        # recipe.locations is aligned with recipe.calls by index; the net each
+        # call produced takes its (file, line).
+        calls = [
+            ("mk_input", (("value", "a"), ("attr", "booleantype")), {}),  # 0 -> 101
+            ("mk_input", (("value", "b"), ("attr", "booleantype")), {}),  # 1 -> 102
+            ("mk_and", (("net", 0), ("net", 1)), {}),                     # 2 -> 103
+        ]
+        refs = {101: ("net", 0), 102: ("net", 1), 103: ("net", 2)}
+        locations = [("/p/prog.py", 5), ("/p/prog.py", 6), ("/p/prog.py", 7)]
+        ctx = _FakeContext(calls, refs, {101: "a", 102: "b", 103: "__n"}, {}, locations)
+        nodes = {n["id"]: n for n in export.to_graph(ctx)["nodes"]}
+        self.assertEqual((nodes[101]["file"], nodes[101]["line"]), ("/p/prog.py", 5))
+        self.assertEqual((nodes[103]["file"], nodes[103]["line"]), ("/p/prog.py", 7))
+
+    def test_missing_location_is_omitted(self):
+        # a None in locations (intrepyd could not find the caller) -> no file/line
+        calls = [("mk_input", (("value", "a"), ("attr", "booleantype")), {})]
+        refs = {101: ("net", 0)}
+        ctx = _FakeContext(calls, refs, {101: "a"}, {}, locations=[None])
+        node = export.to_graph(ctx)["nodes"][0]
+        self.assertNotIn("file", node)
+        self.assertNotIn("line", node)
+
+
+class _FakeTrace:
+    """What intrepyd.export reads off a Trace."""
+
+    def __init__(self, ctx, depth, netvals):
+        self.ctx = ctx
+        self._depth = depth
+        self._netvals = netvals
+
+    def get_max_depth(self):
+        return self._depth
+
+    def get_as_net_dictionary(self):
+        return self._netvals
+
+
+class TraceExportTest(unittest.TestCase):
+    def test_trace_payload_shapes_the_watched_nets(self):
+        trace = _FakeTrace(ctx=5, depth=3, netvals={101: ["T", "F"], 102: ["0", "1"]})
+        payload = export.trace_payload(trace)
+        self.assertEqual(payload["depth"], 3)
+        self.assertEqual(payload["values"], {"101": ["T", "F"], "102": ["0", "1"]})
+
+    def test_trace_for_picks_the_matching_context_with_values(self):
+        class _Ctx:
+            ctx = 7
+
+        context = _Ctx()
+        empty = _FakeTrace(ctx=7, depth=0, netvals={})  # no depth
+        other = _FakeTrace(ctx=9, depth=2, netvals={1: ["T"]})  # wrong context
+        good = _FakeTrace(ctx=7, depth=2, netvals={1: ["T", "F"]})
+        self.assertIs(export._trace_for(context, [empty, other, good]), good)
+        self.assertIsNone(export._trace_for(context, [empty, other]))
 
 
 if __name__ == "__main__":
