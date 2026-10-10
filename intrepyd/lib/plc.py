@@ -128,3 +128,163 @@ def mk_ctu(ctx, name, cu, reset, pv, typ):
     ctx.set_latch_init_next(cv, zero, nxt)
     q = ctx.mk_geq(cv, pv, name + '.Q')
     return cv, q
+
+
+def mk_ton(ctx, name, in_, pt, typ):
+    """
+    On-delay timer (TON). ``Q`` becomes true once ``in_`` has been true for
+    ``pt`` consecutive cycles, and stays true while ``in_`` stays true;
+    ``in_`` going false resets the elapsed time and ``Q``.
+
+    Args:
+        ctx: the context to use
+        name: the unique name (``ET`` is ``name``, ``Q`` is ``name.Q``)
+        in_: the boolean input
+        pt: the preset time, in cycles, as a net of type ``typ``
+        typ: the type counting the elapsed time
+
+    Returns:
+        a pair ``(ET, Q)``: the elapsed-time net and the boolean output
+    """
+    zero = ctx.mk_number("0", typ)
+    one = ctx.mk_number("1", typ)
+    et = ctx.mk_latch(name, typ)
+    below = ctx.mk_lt(et, pt)
+    incremented = ctx.mk_add(et, one)
+    # not in_ -> reset to 0; still ramping -> +1; otherwise hold at pt
+    nxt = ctx.mk_ite(ctx.mk_not(in_), zero, ctx.mk_ite(below, incremented, et))
+    ctx.set_latch_init_next(et, zero, nxt)
+    q = ctx.mk_and(in_, ctx.mk_geq(et, pt), name=name + '.Q')
+    return et, q
+
+
+def mk_tof(ctx, name, in_, pt, typ):
+    """
+    Off-delay timer (TOF). ``Q`` follows ``in_`` up, and when ``in_`` goes
+    false ``Q`` stays true for ``pt`` more cycles before dropping. ``Q`` starts
+    false.
+
+    Args:
+        ctx: the context to use
+        name: the unique name (``ET`` is ``name``, ``Q`` is ``name.Q``)
+        in_: the boolean input
+        pt: the preset time, in cycles, as a net of type ``typ``
+        typ: the type counting the elapsed time
+
+    Returns:
+        a pair ``(ET, Q)``: the elapsed-time net and the boolean output
+    """
+    one = ctx.mk_number("1", typ)
+    zero = ctx.mk_number("0", typ)
+    et = ctx.mk_latch(name, typ)
+    below = ctx.mk_lt(et, pt)
+    incremented = ctx.mk_add(et, one)
+    # in_ -> elapsed back to 0; else count up, saturating at pt
+    nxt = ctx.mk_ite(in_, zero, ctx.mk_ite(below, incremented, et))
+    # starts "expired" (et = pt), so Q is false until in_ is first seen
+    ctx.set_latch_init_next(et, pt, nxt)
+    q = ctx.mk_or(in_, ctx.mk_lt(et, pt), name=name + '.Q')
+    return et, q
+
+
+def mk_tp(ctx, name, in_, pt, typ):
+    """
+    Pulse timer (TP). A rising edge of ``in_`` makes ``Q`` true for exactly
+    ``pt`` cycles; the pulse is not retriggerable (edges during the pulse are
+    ignored).
+
+    Args:
+        ctx: the context to use
+        name: the unique name (``ET`` is ``name``, ``Q`` is ``name.Q``)
+        in_: the boolean input
+        pt: the pulse width, in cycles, as a net of type ``typ``
+        typ: the type counting the elapsed time
+
+    Returns:
+        a pair ``(ET, Q)``: the elapsed-time net and the boolean output
+    """
+    one = ctx.mk_number("1", typ)
+    et = ctx.mk_latch(name, typ)
+    edge = mk_r_trig(ctx, in_, name + '_edge')
+    idle = ctx.mk_geq(et, pt)
+    start = ctx.mk_and(edge, idle)
+    below = ctx.mk_lt(et, pt)
+    incremented = ctx.mk_add(et, one)
+    # start -> elapsed 1 (this cycle counts as the pulse's first); running -> +1;
+    # idle -> stay at pt
+    nxt = ctx.mk_ite(start, one, ctx.mk_ite(below, incremented, et))
+    ctx.set_latch_init_next(et, pt, nxt)
+    q = ctx.mk_or(below, start, name=name + '.Q')
+    return et, q
+
+
+def mk_ctd(ctx, name, cd, load, pv, typ):
+    """
+    Down counter (CTD). ``load`` sets the count ``CV`` to the preset ``pv``;
+    each rising edge of ``cd`` lowers ``CV`` by one, down to zero. ``Q`` is true
+    while ``CV <= 0``. ``CV`` starts at zero (so ``Q`` starts true until loaded).
+
+    Args:
+        ctx: the context to use
+        name: the unique name (``CV`` is ``name``, ``Q`` is ``name.Q``)
+        cd: the count-down signal (counted on its rising edge)
+        load: loads ``pv`` into ``CV`` when true
+        pv: the preset value net (of type ``typ``)
+        typ: the type of the count
+
+    Returns:
+        a pair ``(CV, Q)``: the current count net and the boolean ``CV <= 0``
+    """
+    zero = ctx.mk_number("0", typ)
+    one = ctx.mk_number("1", typ)
+    cd_edge = mk_r_trig(ctx, cd, name + '_cd')
+    cv = ctx.mk_latch(name, typ)
+    above = ctx.mk_gt(cv, zero)
+    decremented = ctx.mk_sub(cv, one)
+    counting = ctx.mk_and(cd_edge, above)
+    nxt = ctx.mk_ite(load, pv, ctx.mk_ite(counting, decremented, cv))
+    ctx.set_latch_init_next(cv, zero, nxt)
+    q = ctx.mk_leq(cv, zero, name=name + '.Q')
+    return cv, q
+
+
+def mk_ctud(ctx, name, cu, cd, reset, load, pv, typ):
+    """
+    Up-down counter (CTUD). A rising edge of ``cu`` raises the count ``CV``, a
+    rising edge of ``cd`` lowers it (down to zero); ``reset`` forces it to zero
+    and ``load`` sets it to the preset ``pv``, with priority reset > load > up >
+    down. ``QU`` is ``CV >= pv`` and ``QD`` is ``CV <= 0``. ``CV`` starts at
+    zero.
+
+    Args:
+        ctx: the context to use
+        name: the unique name (``CV`` is ``name``, ``QU``/``QD`` are
+            ``name.QU``/``name.QD``)
+        cu: the count-up signal (counted on its rising edge)
+        cd: the count-down signal (counted on its rising edge)
+        reset: forces ``CV`` to zero when true
+        load: loads ``pv`` into ``CV`` when true
+        pv: the preset value net (of type ``typ``)
+        typ: the type of the count
+
+    Returns:
+        a triple ``(CV, QU, QD)``
+    """
+    zero = ctx.mk_number("0", typ)
+    one = ctx.mk_number("1", typ)
+    cu_edge = mk_r_trig(ctx, cu, name + '_cu')
+    cd_edge = mk_r_trig(ctx, cd, name + '_cd')
+    cv = ctx.mk_latch(name, typ)
+    up = ctx.mk_and(cu_edge, ctx.mk_not(cd_edge))
+    down = ctx.mk_and(cd_edge, ctx.mk_not(cu_edge))
+    above = ctx.mk_gt(cv, zero)
+    incremented = ctx.mk_add(cv, one)
+    decremented = ctx.mk_sub(cv, one)
+    nxt = ctx.mk_ite(reset, zero,
+                     ctx.mk_ite(load, pv,
+                                ctx.mk_ite(up, incremented,
+                                           ctx.mk_ite(ctx.mk_and(down, above), decremented, cv))))
+    ctx.set_latch_init_next(cv, zero, nxt)
+    qu = ctx.mk_geq(cv, pv, name=name + '.QU')
+    qd = ctx.mk_leq(cv, zero, name=name + '.QD')
+    return cv, qu, qd
