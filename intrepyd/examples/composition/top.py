@@ -1,5 +1,5 @@
 """
-The top model B of the composition example (#32 of intrepid-specs): it imports
+The top model B of the composition example: it imports
 the sub-model A (``StickyAnd``) and instantiates it **twice**, as two
 independent copies ``left`` and ``right``, wired to different inputs.
 
@@ -11,7 +11,7 @@ same directory** as ``top.py`` (as here) and run from that directory::
 
     cd intrepyd/examples/composition
     python top.py                     # build it
-    python -m intrepyd.export top.py  # export its netlist (roadmap #28)
+    python -m intrepyd.export top.py  # export its netlist
 
 Run from elsewhere and the import fails, because that directory is not on the
 import path. If you prefer to keep the models in a package, put an

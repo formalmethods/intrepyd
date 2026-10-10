@@ -1,5 +1,5 @@
 """
-Tests the model-composition example (#32 of intrepid-specs): the two copies of
+Tests the model-composition example: the two copies of
 the sub-model keep independent state. It imports the example the way the guide
 tells users to — from its own directory — by putting that directory on the
 path.

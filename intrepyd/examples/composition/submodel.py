@@ -1,5 +1,5 @@
 """
-The reusable sub-model A of the composition example (#32 of intrepid-specs).
+The reusable sub-model A of the composition example.
 
 ``StickyAnd`` is an ``intrepyd.circuit.Circuit``: a small circuit with inputs
 ``x`` and ``y`` and output ``z``, where ``z`` latches true the first cycle in

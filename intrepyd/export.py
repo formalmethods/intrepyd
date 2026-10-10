@@ -1,7 +1,7 @@
 """
 Exports the circuit of a Context as a JSON graph (a netlist), so that it can be
-drawn as a block diagram — the intrepid-vscode extension (roadmap #28 of
-intrepid-specs) is the first consumer, but the format is generic.
+drawn as a block diagram — the intrepid-vscode extension is the first
+consumer, but the format is generic.
 
 The structure comes from the context's *recipe* (``intrepyd.recipe``), the
 record of the calls that built every net, which already holds each net's

@@ -54,7 +54,7 @@ Changelog = "https://github.com/formalmethods/intrepyd/blob/main/CHANGELOG.md"
 # (pip 25.1 or newer). None of it is installed with intrepyd.
 [dependency-groups]
 lint = ["pylint"]
-# Static type checking of the annotated public API (#29 of intrepid-specs).
+# Static type checking of the annotated public API.
 # mypy reads the sources statically, so this needs no intrepid library.
 typecheck = ["mypy"]
 release = ["build", "packaging"]
@@ -75,7 +75,7 @@ dev = [
 
 [tool.mypy]
 python_version = "3.11"
-# The modules whose public API is annotated so far (#29 of intrepid-specs);
+# The modules whose public API is annotated so far;
 # the rest of the package is type-checked as it gets annotated. Imports into
 # unlisted modules are followed for types but their own errors are silenced,
 # and third-party packages without stubs (pandas, antlr) are not required.

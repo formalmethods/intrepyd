@@ -70,7 +70,7 @@ layout is **both files in the same directory**, and run from there:
 ```bash
 cd your/models            # the directory holding submodel.py and top.py
 python top.py             # from here, "from submodel import StickyAnd" resolves
-python -m intrepyd.export top.py   # the exporter (roadmap #28) finds it too
+python -m intrepyd.export top.py   # the exporter finds it too
 ```
 
 The import works because python puts the script's own directory on the import

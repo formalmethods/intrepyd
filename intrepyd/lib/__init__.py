@@ -1,6 +1,5 @@
 """
-A structured library of reusable intrepyd components (roadmap #30 of
-intrepid-specs).
+A structured library of reusable intrepyd components.
 
 Two submodules:
 

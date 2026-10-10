@@ -15,8 +15,7 @@ produces, and gives the exact commands so the numbers can be regenerated.
 - **Same semantics.** Kind2 reads Lustre `int` as unbounded integers, so the
   comparison uses `--int-type int`; the 32-bit encoding (`int32`) is reported
   apart. Only benchmarks on which the two tools **agree** on the verdict are
-  compared for speed; disagreements are bugs and are reported separately (see
-  [#7](https://github.com/formalmethods/intrepid-specs/blob/main/0007_Kind2Comparison.md)).
+  compared for speed; disagreements are bugs and are reported separately.
 - **What is compared.** intrepyd's portfolio against Kind2's default portfolio,
   and engine by engine (BMC, k-induction, IC3) against the matching Kind2
   engine.
