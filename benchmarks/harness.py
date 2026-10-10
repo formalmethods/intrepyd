@@ -549,6 +549,95 @@ def compare(arguments):
     return 0
 
 
+def _solved_times(results, tool):
+    """The solved times of a tool, ascending."""
+    return sorted(r['time'] for r in by_file(results, tool).values() if solved(r))
+
+
+def plot_cactus(results, tools, path):
+    """Benchmarks solved (y) against cumulative time (x), one curve per tool."""
+    import matplotlib  # pylint: disable=import-outside-toplevel
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
+    fig, axes = plt.subplots(figsize=(7, 5))
+    for tool in tools:
+        times = _solved_times(results, tool)
+        cumulative, xs, ys = 0.0, [], []
+        for index, value in enumerate(times, start=1):
+            cumulative += value
+            xs.append(cumulative)
+            ys.append(index)
+        if xs:
+            axes.plot(xs, ys, marker='.', markersize=4, label='%s (%d)' % (tool, len(times)))
+    axes.set_xlabel('cumulative time (s)')
+    axes.set_ylabel('benchmarks solved')
+    axes.set_title('Benchmarks solved over time')
+    axes.legend()
+    axes.grid(True, alpha=0.3)
+    fig.savefig(path, dpi=120, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot_scatter(results, tool_a, tool_b, timeout, path):
+    """Per-benchmark runtime of tool_a (y) against tool_b (x), log-log, with the
+    timeout as the border; unsolved benchmarks sit on the timeout lines."""
+    import matplotlib  # pylint: disable=import-outside-toplevel
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt  # pylint: disable=import-outside-toplevel
+    first, second = by_file(results, tool_a), by_file(results, tool_b)
+    floor = 0.01
+    cap = timeout
+    both_x, both_y, one_x, one_y = [], [], [], []
+    for name in sorted(set(first) | set(second)):
+        one, two = first.get(name), second.get(name)
+        if not solved(one) and not solved(two):
+            continue
+        ya = min(max(one['time'], floor), cap) if solved(one) else cap
+        xb = min(max(two['time'], floor), cap) if solved(two) else cap
+        if solved(one) and solved(two):
+            both_x.append(xb)
+            both_y.append(ya)
+        else:
+            one_x.append(xb)
+            one_y.append(ya)
+    fig, axes = plt.subplots(figsize=(6, 6))
+    axes.plot([floor, cap], [floor, cap], color='gray', linewidth=0.8)  # diagonal
+    axes.axvline(cap, color='gray', linewidth=0.6, linestyle='--')
+    axes.axhline(cap, color='gray', linewidth=0.6, linestyle='--')
+    axes.scatter(both_x, both_y, s=14, label='solved by both')
+    axes.scatter(one_x, one_y, s=14, marker='x', label='solved by one only')
+    axes.set_xscale('log')
+    axes.set_yscale('log')
+    axes.set_xlim(floor, cap * 1.3)
+    axes.set_ylim(floor, cap * 1.3)
+    axes.set_xlabel('%s time (s)' % tool_b)
+    axes.set_ylabel('%s time (s)' % tool_a)
+    axes.set_title('%s vs %s (timeout %gs)' % (tool_a, tool_b, timeout))
+    axes.legend()
+    axes.grid(True, which='both', alpha=0.3)
+    fig.savefig(path, dpi=120, bbox_inches='tight')
+    plt.close(fig)
+
+
+def plot(arguments):
+    """Writes the scatter and cactus plots of a run as PNGs."""
+    results = load(*arguments.results)
+    if not results:
+        print('No results in %s' % ', '.join(arguments.results), file=sys.stderr)
+        return 1
+    timeout = max(r.get('timeout') or 0 for r in results.values()) or 30.0
+    present = [tool for tool in TOOLS if any(t == tool for _, t in results)]
+    cactus_tools = arguments.tools.split(',') if arguments.tools else present
+    os.makedirs(arguments.out_dir, exist_ok=True)
+    cactus_path = os.path.join(arguments.out_dir, 'cactus.png')
+    plot_cactus(results, cactus_tools, cactus_path)
+    tool_a, tool_b = arguments.pair.split(',')
+    scatter_path = os.path.join(arguments.out_dir, 'scatter.png')
+    plot_scatter(results, tool_a, tool_b, timeout, scatter_path)
+    print('Wrote %s and %s' % (scatter_path, cactus_path))
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n', maxsplit=1)[0])
     commands = parser.add_subparsers(dest='command', required=True)
@@ -578,6 +667,13 @@ def main():
     command.add_argument('first')
     command.add_argument('second')
     command.set_defaults(function=compare)
+    command = commands.add_parser('plot', help='writes the scatter and cactus plots of a run')
+    command.add_argument('results', nargs='+', help='one run, or several merged (as report)')
+    command.add_argument('--pair', default='portfolio,kind2',
+                         help='the two tools of the scatter plot (portfolio,kind2)')
+    command.add_argument('--tools', help='comma separated tools for the cactus plot (default: all present)')
+    command.add_argument('--out-dir', default='.', help='where to write scatter.png and cactus.png (.)')
+    command.set_defaults(function=plot)
     command = commands.add_parser('worker')
     command.add_argument('tool', choices=INTREPYD_TOOLS)
     command.add_argument('encoding')

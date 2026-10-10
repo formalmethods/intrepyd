@@ -61,9 +61,11 @@ nav:
       - Model checking: guide/model-checking.md
       - Portfolio: guide/portfolio.md
       - Component library: guide/components.md
+      - Composing models: guide/composing-models.md
       - Test generation: guide/test-generation.md
       - Importing models: guide/importing.md
       - Benchmarking: guide/benchmarking.md
+      - Performance against Kind2: guide/kind2-comparison.md
       - Running as a service: guide/service.md
   - API reference:
       - Overview: reference/index.md
