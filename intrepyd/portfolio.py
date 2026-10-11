@@ -319,6 +319,11 @@ def _solve(engine, targets, max_depth):
                 return result, [], None
             depth += 1
         return EngineResult.UNKNOWN, [], None
+    # The depth of a trace is the last at which it has a value: with no
+    # input and no watch, the trace of a counterexample has none after
+    # depth 0. The targets have one at every depth.
+    for target in targets:
+        engine.add_watch(target)
     result = engine.reach_targets()
     if result == EngineResult.REACHABLE:
         reached = list(engine.get_last_reached_targets())

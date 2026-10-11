@@ -36,6 +36,11 @@ one, and the section becomes the notes of the GitHub release.
   or newer; with an older library the rest of intrepyd works as before, and
   asking for a certificate raises `RuntimeError` (a diagram's verification
   says so).
+- **Portfolio fix:** when backward reachability or PDR was the first to find
+  the counterexample of a circuit with no inputs, `get_last_trace()` raised
+  `Cannot rebuild the counterexample` (the engine reported depth 0, and BMC
+  found nothing there). The engines now watch the targets, and the trace has
+  the depth of the counterexample.
 
 ## 0.20.0
 

@@ -70,6 +70,24 @@ class TestPortfolio(unittest.TestCase):
         self.assertEqual(['0', '1', '2', '3', '4', '5'],
                          trace.get_as_net_dictionary()[c])
 
+    def test_counterexample_of_each_engine_without_inputs(self):
+        # with no input, the trace of an engine has no value after depth 0
+        # unless it watches something: the counterexample is still rebuilt
+        # at its depth, whichever engine finds it
+        for engine in ('bmc', 'kind', 'br', 'pdr'):
+            with self.subTest(engine=engine):
+                ctx = ip.Context()
+                t = ctx.mk_int8_type()
+                c = ctx.mk_latch('c', t)
+                ctx.set_latch_init_next(c, ctx.mk_number('0', t),
+                                        ctx.mk_add(c, ctx.mk_number('1', t)))
+                portfolio = ctx.mk_portfolio(engines=(engine,))
+                portfolio.add_target(ctx.mk_eq(c, ctx.mk_number('2', t)))
+                portfolio.add_watch(c)
+                self.assertEqual(EngineResult.REACHABLE, portfolio.reach_targets(timeout=60))
+                self.assertEqual(['0', '1', '2'],
+                                 portfolio.get_last_trace().get_as_net_dictionary()[c])
+
     def test_proof(self):
         ctx = ip.Context()
         c, t = mk_counter(ctx, 5)
