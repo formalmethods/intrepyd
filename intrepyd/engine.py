@@ -73,6 +73,27 @@ class Engine:
         """
         raise NotImplementedError('Should have implemented this')
 
+    def set_produce_certificates(self):
+        """
+        Makes an UNREACHABLE answer come with a proof certificate, which
+        get_last_certificate() returns: an SMT-LIB 2 script, each of whose
+        check-sat must answer unsat, that any SMT solver can run to check the
+        proof (z3 FILE, cvc5 FILE, ...). The library checks it first, with a
+        solver of its own: a certificate that does not hold turns the answer
+        into UNKNOWN. Needs intrepid 1.4 or newer.
+        """
+        self._set_produce_certificates_impl()
+
+    def get_last_certificate(self):
+        """
+        Returns the proof certificate of the last answer, if it was
+        UNREACHABLE and certificates were asked for (set_produce_certificates),
+        as SMT-LIB 2 text; None otherwise
+        """
+        if self.last_result != EngineResult.UNREACHABLE:
+            return None
+        return self._get_last_certificate_impl()
+
     def can_reach(self):
         """
         Tells if the engine can reach targets
@@ -112,6 +133,18 @@ class Engine:
     def _remove_last_reached_targets_impl(self):
         """
         Engine-dependent removal of last reached targets
+        """
+        raise NotImplementedError('Should have implemented this')
+
+    def _set_produce_certificates_impl(self):
+        """
+        Engine-dependent request of proof certificates
+        """
+        raise NotImplementedError('Should have implemented this')
+
+    def _get_last_certificate_impl(self):
+        """
+        Engine-dependent retrieval of the last proof certificate
         """
         raise NotImplementedError('Should have implemented this')
 
@@ -184,6 +217,12 @@ class Bmc(Engine):
     def _remove_last_reached_targets_impl(self):
         return ip.api.bmc_remove_last_reached_targets(self.bmc)
 
+    def _set_produce_certificates_impl(self):
+        ip.api.set_bmc_produce_certificates(self.bmc)
+
+    def _get_last_certificate_impl(self):
+        return ip.api.bmc_get_certificate(self.bmc)
+
 class OptimizingBmc(Bmc):
     """
     An Optimizing Bounded Model Checking engine
@@ -239,6 +278,12 @@ class BackwardReach(Engine):
     def _remove_last_reached_targets_impl(self):
         return ip.api.br_remove_last_reached_targets(self.breach)
 
+    def _set_produce_certificates_impl(self):
+        ip.api.set_br_produce_certificates(self.breach)
+
+    def _get_last_certificate_impl(self):
+        return ip.api.br_get_certificate(self.breach)
+
 
 class Pdr(Engine):
     """
@@ -284,3 +329,9 @@ class Pdr(Engine):
 
     def _remove_last_reached_targets_impl(self):
         return ip.api.pdr_remove_last_reached_targets(self.pdr)
+
+    def _set_produce_certificates_impl(self):
+        ip.api.set_pdr_produce_certificates(self.pdr)
+
+    def _get_last_certificate_impl(self):
+        return ip.api.pdr_get_certificate(self.pdr)

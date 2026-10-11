@@ -7,8 +7,10 @@ import os
 import subprocess
 import sys
 import unittest
+from unittest import mock
 
-from intrepyd import diagram
+from intrepyd import api, diagram
+from intrepyd.lib import catalogue
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir)
 
@@ -181,6 +183,11 @@ class VerifyTest(unittest.TestCase):
         with self.assertRaisesRegex(diagram.DiagramError, 'unknown engine "z3"'):
             diagram.verify(_counter_to(3), engine="z3")
 
+    def test_certificates_from_an_intrepid_without_them_are_refused(self):
+        with mock.patch.object(api, "HAS_CERTIFICATES", False):
+            with self.assertRaisesRegex(diagram.DiagramError, "need intrepid 1.4 or newer"):
+                diagram.verify(_counter_to(3), certificates=True)
+
     def test_the_command_line_verifies_standard_input(self):
         run = subprocess.run([sys.executable, "-m", "intrepyd.diagram", "verify", "-",
                               "--timeout", "30"],
@@ -190,6 +197,142 @@ class VerifyTest(unittest.TestCase):
         [result] = json.loads(run.stdout)["results"]
         self.assertEqual(result["verdict"], "fails")
         self.assertEqual(result["trace"]["steps"], 3)
+
+
+def _subsystem(nid, name, parent=None):
+    node = {"id": nid, "kind": "subsystem", "name": name}
+    if parent is not None:
+        node["parent"] = parent
+    return node
+
+
+def _inside(node, parent):
+    return {**node, "parent": parent}
+
+
+class SubsystemTest(unittest.TestCase):
+
+    def _xor_of_ands(self):
+        """y = (a and b) xor c, the AND inside a sub-system "both" (In a, In b,
+        Out ab) and the XOR outside."""
+        nodes = [_input(1, "a"), _input(2, "b"), _input(3, "c"), _subsystem(4, "both"),
+                 _inside(_input(5, "x"), 4), _inside(_input(6, "y"), 4),
+                 _inside(_gate(7, "and"), 4), _inside({"id": 8, "kind": "output", "name": "ab"}, 4),
+                 _gate(9, "xor"), {"id": 10, "kind": "output", "name": "out"}]
+        edges = [_wire(1, 4, "x"), _wire(2, 4, "y"),
+                 _wire(5, 7, "a"), _wire(6, 7, "b"), _wire(7, 8, "in"),
+                 _wire(4, 9, "a"), _wire(3, 9, "b"), _wire(9, 10, "in")]
+        stimuli = {"1": ["true", "true", "false"], "2": ["true", "false", "true"],
+                   "3": ["false", "false", "true"]}
+        return _doc(nodes, edges, steps=3, stimuli=stimuli)
+
+    def test_a_subsystem_is_its_blocks(self):
+        values = diagram.simulate(self._xor_of_ands())["values"]
+        self.assertEqual(values["7.0"], ["T", "F", "F"])  # the AND inside
+        self.assertEqual(values["4.0"], ["T", "F", "F"])  # the sub-system's output
+        self.assertEqual(values["5.0"], ["T", "T", "F"])  # its In "x" carries a
+        self.assertEqual(values["9.0"], ["T", "F", "T"])
+
+    def test_subsystems_nest_and_names_are_prefixed(self):
+        # an outer sub-system "outer" holding "both" and a latch, both named
+        doc = self._xor_of_ands()
+        nodes = doc["circuit"]["nodes"]
+        nodes.append(_subsystem(11, "outer"))
+        nodes[3]["parent"] = 11  # "both" goes into "outer"
+        nodes[6]["name"] = "g"  # its AND
+        nodes.extend([_inside(_input(12, "p"), 11), _inside(_input(13, "q"), 11),
+                      _inside({"id": 14, "kind": "output", "name": "r"}, 11)])
+        doc["circuit"]["edges"] = [e for e in doc["circuit"]["edges"] if e["to"] != 4 and e["from"] != 4]
+        doc["circuit"]["edges"] += [_wire(1, 11, "p"), _wire(2, 11, "q"), _wire(12, 4, "x"),
+                                    _wire(13, 4, "y"), _wire(4, 14, "in"), _wire(11, 9, "a")]
+        values = diagram.simulate(doc)["values"]
+        self.assertEqual(values["11.0"], ["T", "F", "F"])
+        self.assertEqual(values["9.0"], ["T", "F", "T"])
+        circuit = diagram.build(doc)
+        self.assertIn("outer.both.g", circuit.ctx.nets)
+
+    def test_a_subsystem_with_a_latch_in_a_loop_through_it(self):
+        # a toggle: t' = not t, the latch outside, the NOT inside a sub-system
+        nodes = [{"id": 1, "kind": "latch", "name": "t", "type": "bool"},
+                 {"id": 2, "kind": "const", "name": None, "op": "false", "value": "false"},
+                 _subsystem(3, "inv"), _inside(_input(4, "i"), 3), _inside(_gate(5, "not"), 3),
+                 _inside({"id": 6, "kind": "output", "name": "o"}, 3)]
+        edges = [_wire(2, 1, "init"), _wire(3, 1, "next"), _wire(1, 3, "i"),
+                 _wire(4, 5, "in"), _wire(5, 6, "in")]
+        values = diagram.simulate(_doc(nodes, edges, steps=4))["values"]
+        self.assertEqual(values["1.0"], ["F", "T", "F", "T"])
+
+    def test_an_unwired_subsystem_input_is_a_readable_error(self):
+        doc = self._xor_of_ands()
+        doc["circuit"]["edges"] = [e for e in doc["circuit"]["edges"] if e["port"] != "y"]
+        with self.assertRaisesRegex(diagram.DiagramError, 'subsystem "both": input "y" is not wired'):
+            diagram.simulate(doc)
+        doc["circuit"]["edges"].append(_wire(2, 4, "zz"))
+        with self.assertRaisesRegex(diagram.DiagramError, 'subsystem "both" has no input "zz"'):
+            diagram.simulate(doc)
+
+    def test_a_property_inside_a_subsystem_is_verified(self):
+        doc = self._xor_of_ands()
+        doc["circuit"]["nodes"].append(_inside({"id": 20, "kind": "assertion", "name": "never_both"}, 4))
+        doc["circuit"]["nodes"].append(_inside(_gate(21, "not"), 4))
+        doc["circuit"]["edges"] += [_wire(7, 21, "in"), _wire(21, 20, "in")]
+        [result] = diagram.verify(doc, timeout=30)["results"]
+        self.assertEqual(result["verdict"], "fails")
+        self.assertEqual(result["block"], 20)
+        stimuli = result["trace"]["stimuli"]
+        self.assertEqual((stimuli["1"][-1], stimuli["2"][-1]), ("true", "true"))
+
+
+class CatalogueTest(unittest.TestCase):
+
+    def test_every_block_builds_with_the_outputs_it_declares(self):
+        # each library block, every pin wired from an input of the pin's type
+        for spec in catalogue.BLOCKS:
+            with self.subTest(spec["symbol"]):
+                params = {p["key"]: p["default"] for p in spec["params"]}
+                nodes = [{"id": 1, "kind": "component", "name": "b", "module": spec["module"],
+                          "symbol": spec["symbol"], "params": params}]
+                edges = []
+                for k, pin in enumerate(spec["inputs"]):
+                    type_ = _type_of(pin["type"], params, spec) or "bool"
+                    nodes.append(_input(10 + k, f"i{k}", type_))
+                    edges.append(_wire(10 + k, 1, pin["port"]))
+                circuit = diagram.build(_doc(nodes, edges))
+                self.assertEqual(sorted(i for (b, i) in circuit.outputs if b == 1),
+                                 list(range(len(spec["outputs"]))))
+
+    def test_optional_pins_may_stay_unwired(self):
+        # a counter to 3 by 1 from 0, then by 2 from 1 when its pins are wired
+        def counter(extra_nodes, extra_edges):
+            nodes = [{"id": 1, "kind": "component", "name": "k", "module": "eda",
+                      "symbol": "mk_counter", "params": {"t": "int8"}},
+                     {"id": 2, "kind": "const", "name": None, "type": "int8", "value": "5"}] + extra_nodes
+            edges = [_wire(2, 1, "limit")] + extra_edges
+            return diagram.simulate(_doc(nodes, edges, steps=4))["values"]["1.0"]
+        self.assertEqual(counter([], []), ["0", "1", "2", "3"])
+        ones = [{"id": 3, "kind": "const", "name": None, "type": "int8", "value": "1"},
+                {"id": 4, "kind": "const", "name": None, "type": "int8", "value": "2"}]
+        self.assertEqual(counter(ones, [_wire(3, 1, "init"), _wire(4, 1, "increment")]),
+                         ["1", "3", "5", "5"])
+
+    def test_the_command_line_prints_the_catalogue(self):
+        run = subprocess.run([sys.executable, "-m", "intrepyd.diagram", "catalogue"],
+                             capture_output=True, text=True, cwd=ROOT, check=False)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        data = json.loads(run.stdout)
+        self.assertEqual(data["format"], catalogue.FORMAT)
+        self.assertEqual([b["symbol"] for b in data["blocks"]], [b["symbol"] for b in catalogue.BLOCKS])
+
+
+def _type_of(ref, params, spec):
+    if ref is None:
+        return None
+    if ref["kind"] == "bool":
+        return "bool"
+    if ref["kind"] == "param":
+        return params[ref["key"]]
+    other = next(p for p in spec["inputs"] if p["port"] == ref["port"])
+    return _type_of(other["type"], params, spec)
 
 
 if __name__ == "__main__":

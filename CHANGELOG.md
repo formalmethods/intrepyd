@@ -4,6 +4,39 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.21.0
+
+- **The catalogue of `intrepyd.lib`**, `intrepyd.lib.catalogue`: every library
+  block described as data — its label and description, its parameters, its
+  input pins with their types (and whether they may stay unwired), its outputs
+  with their types, and how to call it. `python -m intrepyd.diagram catalogue`
+  prints it as JSON, so a tool (the intrepid-vscode editor's palette) offers
+  the blocks without keeping its own copy of them; `intrepyd.diagram` builds
+  the library blocks of a diagram from it.
+- **Sub-systems in diagrams**: a `"kind": "subsystem"` block holds the blocks
+  whose `"parent"` it is; its In blocks are its inputs, wired from outside by
+  name, and its Out blocks its outputs. Sub-systems nest; they are flattened
+  when the circuit is built, the names inside prefixed with the sub-system's
+  (`"filter.acc"`), and a simulation gives a sub-system's outputs the values of
+  its Out blocks.
+- The counter of `intrepyd.lib.eda` (`mk_counter`) has all its pins in a
+  diagram: `init`, `increment`, `enable` and `reset` may be wired, or left
+  unwired for their defaults.
+- **Proof certificates.** An engine that proves a target unreachable can say
+  why, in a form anyone can check: `engine.set_produce_certificates()`, then
+  `engine.get_last_certificate()` after an `UNREACHABLE` answer, an SMT-LIB 2
+  script each of whose `check-sat` must answer `unsat` (`z3 proof.smt2`,
+  `cvc5 proof.smt2`, ...). PDR and backward reachability give an inductive
+  invariant, k-induction its base cases and its step. intrepid checks each
+  certificate before giving it, and one that does not hold makes the answer
+  `UNKNOWN`. The portfolio gives the winner's
+  (`ctx.mk_portfolio(certificates=True)`), and `intrepyd.diagram verify`
+  gives each proved property its `"certificate"` (`--certificates`, or
+  `"certificates": true` in the diagram's `verification`). Needs intrepid 1.4
+  or newer; with an older library the rest of intrepyd works as before, and
+  asking for a certificate raises `RuntimeError` (a diagram's verification
+  says so).
+
 ## 0.20.0
 
 Bump version
@@ -16,9 +49,14 @@ Bump version
   gates with more than two inputs (chained), switches, casts, latches, the
   blocks of `intrepyd.lib` and their several outputs, Out blocks — and
   `simulate()` runs its stimuli and returns every block's value at every step.
-  `python -m intrepyd.diagram simulate FILE` (or `-` for standard input) prints
-  the result as JSON, for the editor to show. See the module's documentation
-  for the format.
+  `verify()` checks the diagram's properties — Assertion blocks (must always
+  hold) and Target blocks (to reach) — each with its own run of the portfolio
+  (or one engine), and returns a verdict per property: *holds* / *fails*,
+  *reached* / *unreachable*, or *unknown*; a failing assertion or a reached
+  target comes with its trace, as the inputs at each step and every block's
+  values along it. `python -m intrepyd.diagram simulate FILE` and `verify FILE`
+  (`-` for standard input) print the result as JSON, for the editor to show.
+  See the module's documentation for the format.
 - Export schema version 2: each node carries the source `file` and `line` that
   built the net (when the recipe recorded it), so a viewer can jump from a
   block to the line of python that created it. Version 1 is the same without

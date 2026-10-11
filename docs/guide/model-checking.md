@@ -129,3 +129,48 @@ invariants are harder to find.
 The engines are complementary, which is what the [portfolio](portfolio.md)
 exploits: BMC finds counterexamples fastest, and k-induction, backward
 reachability and PDR each prove properties the others cannot.
+
+## Proof certificates
+
+A counterexample can be checked by anyone: simulate it. A proof can be checked
+too. Ask an engine for **proof certificates**, and an `UNREACHABLE` answer
+comes with the formulas it rests on, as an SMT-LIB 2 script that any SMT
+solver can run, so the verdict does not have to be taken on intrepid's word:
+
+```python
+pdr = ctx.mk_pdr()
+pdr.add_target(ctx.mk_eq(c, ctx.mk_number('-1', int_t)))
+pdr.set_produce_certificates()
+if pdr.reach_targets() == EngineResult.UNREACHABLE:
+    with open('proof.smt2', 'w') as out:
+        out.write(pdr.get_last_certificate())
+```
+
+```console
+$ z3 proof.smt2
+unsat
+unsat
+unsat
+```
+
+Each `check-sat` of the script must answer `unsat`. The script defines the
+circuit (`Init`, `Assume`, `Trans`, `Bad`) and states, in its header, what the
+conditions prove:
+
+- PDR and backward reachability give an **inductive invariant** `Inv`, and
+  three conditions: `Inv` holds in the initial states, every step keeps it,
+  and it excludes the targets;
+- k-induction (`set_use_induction()`) gives its **base cases**, no target in
+  0 to k steps, and its **step**, no path of k+1 different states that
+  reaches a target only at its last one.
+
+Machine integers are bit-vectors with the signedness of each operator, as
+intrepid checked them, so the solver proves exactly the same thing. intrepid
+checks every certificate itself before giving it: one that does not hold
+turns the answer into `UNKNOWN`. A certificate is only made when asked for,
+as the check costs time; plain BMC proves nothing and gives none. A portfolio
+gives the certificate of the engine that proved
+(`ctx.mk_portfolio(certificates=True)`, then `get_last_certificate()`).
+
+Certificates need intrepid 1.4 or newer: with an older library,
+`set_produce_certificates()` raises `RuntimeError`.

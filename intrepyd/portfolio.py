@@ -13,6 +13,10 @@ any moment. The process builds the circuit again from the recipe of the
 context (see intrepyd.recipe), runs its engine, and sends back its answer.
 The counterexample of a REACHABLE answer is rebuilt in the caller's context,
 by BMC at the depth the engine found, when get_last_trace() first asks for it.
+With certificates=True, an UNREACHABLE answer comes with the proof certificate
+of the engine that gave it (get_last_certificate(), see
+Engine.set_produce_certificates); an engine whose certificate does not hold
+answers UNKNOWN, and the others go on.
 
 The processes are started with multiprocessing (forkserver on Linux, spawn on
 Windows), which imports the main module of the program in each of them: as
@@ -33,7 +37,7 @@ import threading
 import time
 import os
 from multiprocessing import connection
-from intrepyd.engine import Engine, EngineResult
+from intrepyd.engine import Bmc, Engine, EngineResult
 from intrepyd.recipe import replay
 
 # The engines a portfolio can run:
@@ -53,13 +57,15 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
     has none, and implements the public methods instead.
     """
 
-    def __init__(self, context, engines=ENGINES, max_depth=None):
+    def __init__(self, context, engines=ENGINES, max_depth=None, certificates=False):
         """
         Args:
             context (Context): the context of the circuit
             engines (iterable): which of ENGINES to run, all by default
             max_depth (int=None): the deepest depth that bmc and kind try;
                 None for no limit
+            certificates (bool=False): whether an UNREACHABLE answer comes
+                with a proof certificate (get_last_certificate)
         """
         Engine.__init__(self, context.ctx)
         engines = tuple(engines)
@@ -70,6 +76,7 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
         self.context = context
         self.engines = engines
         self.max_depth = max_depth
+        self.certificates = certificates
         self.targets = []
         self.watches = []
         self._last_engine = None
@@ -78,6 +85,7 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
         self._last_reached = ()
         self._last_depth = None
         self._last_trace = None
+        self._last_certificate = None
 
     def add_target(self, net):
         self.context.recipe.ref(net)    # raises if it cannot be rebuilt
@@ -102,17 +110,19 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
         self._last_reached = ()
         self._last_depth = None
         self._last_trace = None
+        self._last_certificate = None
         start = time.monotonic()
         # The class of the context goes to the processes, which make their
         # own context of the same class
         winner = _run(self.engines, (type(self.context), recipe.calls), targets,
-                      self.max_depth, timeout, self._last_errors)
+                      (self.max_depth, self.certificates), timeout, self._last_errors)
         self._last_time = time.monotonic() - start
         self.last_result = EngineResult.UNKNOWN
         if winner is not None:
-            engine, result, reached, depth = winner
+            engine, result, reached, depth, certificate = winner
             self._last_engine = engine
             self.last_result = result
+            self._last_certificate = certificate
             self._last_reached = tuple(self.targets[index] for index in reached)
             self._last_depth = depth
         return self.last_result
@@ -141,6 +151,11 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
         if self.last_result != EngineResult.REACHABLE:
             return ()
         return self._last_reached
+
+    def get_last_certificate(self):
+        if self.last_result != EngineResult.UNREACHABLE:
+            return None
+        return self._last_certificate
 
     def get_last_trace(self):
         if self.last_result != EngineResult.REACHABLE:
@@ -181,11 +196,12 @@ def _multiprocessing_context():
     return context
 
 
-def _run(engines, circuit, targets, max_depth, timeout, errors):  # pylint: disable=too-many-locals
+def _run(engines, circuit, targets, how, timeout, errors):  # pylint: disable=too-many-locals
     """
-    Runs each engine in a process, on circuit, (context class, recipe calls);
-    returns (engine, result, indices of the
-    reached targets, depth) for the first conclusive answer, or None
+    Runs each engine in a process, on circuit, (context class, recipe calls),
+    how being (max depth, certificates); returns (engine, result, indices of
+    the reached targets, depth, certificate) for the first conclusive answer,
+    or None
     """
     context = _multiprocessing_context()
     deadline = None if timeout is None else time.monotonic() + timeout
@@ -195,7 +211,7 @@ def _run(engines, circuit, targets, max_depth, timeout, errors):  # pylint: disa
         for engine in engines:
             receiver, sender = context.Pipe(duplex=False)
             process = context.Process(target=_work, name='intrepyd-portfolio-' + engine,
-                                      args=(engine, circuit, targets, max_depth, sender),
+                                      args=(engine, circuit, targets, how, sender),
                                       daemon=True)
             process.start()
             sender.close()
@@ -217,9 +233,9 @@ def _run(engines, circuit, targets, max_depth, timeout, errors):  # pylint: disa
                 if message[0] == 'error':
                     errors[engine] = message[1]
                     continue
-                _, result, reached, depth = message
+                _, result, reached, depth, certificate = message
                 if result != EngineResult.UNKNOWN.name:
-                    return engine, EngineResult[result], reached, depth
+                    return engine, EngineResult[result], reached, depth, certificate
         return None
     finally:
         for receiver in running:
@@ -231,11 +247,11 @@ def _run(engines, circuit, targets, max_depth, timeout, errors):  # pylint: disa
             process.join()
 
 
-def _work(engine, circuit, targets, max_depth, sender):
+def _work(engine, circuit, targets, how, sender):
     """
     The process of one engine: builds the circuit, runs the engine, and
-    sends ('done', result name, indices of the reached targets, depth), or
-    ('error', message)
+    sends ('done', result name, indices of the reached targets, depth,
+    certificate), or ('error', message)
     """
     _exit_with_parent()
     # The engines run here, even if the process that started them imported a
@@ -243,16 +259,26 @@ def _work(engine, circuit, targets, max_depth, sender):
     from intrepyd.remote import use_local  # pylint: disable=import-outside-toplevel
     use_local()
     try:
-        context_class, calls = circuit
-        context = context_class()
-        resolve = replay(calls, context)
-        nets = [resolve(target) for target in targets]
-        result, reached, depth = _RUNNERS[engine](context, nets, max_depth)
-        sender.send(('done', result.name, [nets.index(net) for net in reached], depth))
+        sender.send(_answer(engine, circuit, targets, how))
     except Exception as error:  # pylint: disable=broad-except
         sender.send(('error', '%s: %s' % (type(error).__name__, error)))
     finally:
         sender.close()
+
+
+def _answer(engine, circuit, targets, how):
+    """What _work sends for one engine, once it has run"""
+    context_class, calls = circuit
+    context = context_class()
+    resolve = replay(calls, context)
+    nets = [resolve(target) for target in targets]
+    max_depth, certificates = how
+    runner = _RUNNERS[engine](context, max_depth)
+    if certificates and engine != 'bmc':
+        runner.set_produce_certificates()
+    result, reached, depth = _solve(runner, nets, max_depth)
+    return ('done', result.name, [nets.index(net) for net in reached], depth,
+            runner.get_last_certificate() if certificates else None)
 
 
 def _exit_with_parent():
@@ -271,27 +297,28 @@ def _exit_with_parent():
     threading.Thread(target=watch, daemon=True).start()
 
 
-def _run_bmc(context, targets, max_depth, induction):
+def _mk_bmc(context, induction):
     bmc = context.mk_bmc()
     if induction:
         bmc.set_use_induction()
-    for target in targets:
-        bmc.add_target(target)
-    depth = 0
-    while max_depth is None or depth <= max_depth:
-        bmc.set_current_depth(depth)
-        result = bmc.reach_targets()
-        if result == EngineResult.REACHABLE:
-            return result, list(bmc.get_last_reached_targets()), depth
-        if result == EngineResult.UNREACHABLE:
-            return result, [], None
-        depth += 1
-    return EngineResult.UNKNOWN, [], None
+    return bmc
 
 
-def _run_once(engine, targets):
+def _solve(engine, targets, max_depth):
+    """Runs an engine on the targets: (result, the targets reached, depth)"""
     for target in targets:
         engine.add_target(target)
+    if isinstance(engine, Bmc):
+        depth = 0
+        while max_depth is None or depth <= max_depth:
+            engine.set_current_depth(depth)
+            result = engine.reach_targets()
+            if result == EngineResult.REACHABLE:
+                return result, list(engine.get_last_reached_targets()), depth
+            if result == EngineResult.UNREACHABLE:
+                return result, [], None
+            depth += 1
+        return EngineResult.UNKNOWN, [], None
     result = engine.reach_targets()
     if result == EngineResult.REACHABLE:
         reached = list(engine.get_last_reached_targets())
@@ -299,9 +326,10 @@ def _run_once(engine, targets):
     return result, [], None
 
 
+# The engine each name runs, made in a context
 _RUNNERS = {
-    'bmc': lambda context, targets, max_depth: _run_bmc(context, targets, max_depth, False),
-    'kind': lambda context, targets, max_depth: _run_bmc(context, targets, max_depth, True),
-    'br': lambda context, targets, _: _run_once(context.mk_backward_reach(), targets),
-    'pdr': lambda context, targets, _: _run_once(context.mk_pdr(), targets),
+    'bmc': lambda context, _: _mk_bmc(context, False),
+    'kind': lambda context, _: _mk_bmc(context, True),
+    'br': lambda context, _: context.mk_backward_reach(),
+    'pdr': lambda context, _: context.mk_pdr(),
 }

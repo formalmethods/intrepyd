@@ -26,7 +26,7 @@ import sys
 from typing import NewType
 
 __all__ = ['INT_ENGINE_RESULT_UNKNOWN', 'INT_ENGINE_RESULT_REACHABLE',
-           'INT_ENGINE_RESULT_UNREACHABLE', 'FUNCTIONS', 'LIBRARY_PATH',
+           'INT_ENGINE_RESULT_UNREACHABLE', 'FUNCTIONS', 'LIBRARY_PATH', 'HAS_CERTIFICATES',
            'Net', 'Type']
 
 # The python-level types of the values this binding exchanges, for annotating
@@ -128,6 +128,20 @@ def _bind(name, restype, argtypes):
     return wrapper
 
 
+def _bind_if_present(name, restype, argtypes, needs):
+    """As _bind, for a function a library older than `needs` does not have:
+    calling it then raises RuntimeError, saying so."""
+    if hasattr(_lib, name):
+        return _bind(name, restype, argtypes)
+
+    def missing(*_args):
+        raise RuntimeError(f'{name} is not in this intrepid library ({LIBRARY_PATH}): '
+                           f'it needs intrepid {needs} or newer')
+
+    missing.__name__ = name
+    return missing
+
+
 # check_exception and clear_exception are exposed as they are: wrapping them
 # would clear the very error they are asked about.
 def check_exception():
@@ -175,6 +189,14 @@ pdr_remove_last_reached_targets = _bind('pdr_remove_last_reached_targets', VOID,
 pdr_last_reached_targets_number = _bind('pdr_last_reached_targets_number', UINT, (HANDLE,))
 pdr_last_reached_target = _bind('pdr_last_reached_target', UINT, (HANDLE, UINT))
 pdr_get_trace = _bind('pdr_get_trace', HANDLE, (HANDLE, HANDLE, UINT))
+# Proof certificates, since intrepid 1.4
+set_bmc_produce_certificates = _bind_if_present('set_bmc_produce_certificates', VOID, (HANDLE,), '1.4')
+bmc_get_certificate = _bind_if_present('bmc_get_certificate', STR, (HANDLE,), '1.4')
+set_br_produce_certificates = _bind_if_present('set_br_produce_certificates', VOID, (HANDLE,), '1.4')
+br_get_certificate = _bind_if_present('br_get_certificate', STR, (HANDLE,), '1.4')
+set_pdr_produce_certificates = _bind_if_present('set_pdr_produce_certificates', VOID, (HANDLE,), '1.4')
+pdr_get_certificate = _bind_if_present('pdr_get_certificate', STR, (HANDLE,), '1.4')
+HAS_CERTIFICATES = hasattr(_lib, 'pdr_get_certificate')
 trace_prepare_value_for_net = _bind('trace_prepare_value_for_net', UINT, (HANDLE, HANDLE, UINT, UINT))
 prepare_value_for_net = _bind('prepare_value_for_net', UINT, (HANDLE, UINT))
 value_at = _bind('value_at', CHAR, (UINT,))

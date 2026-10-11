@@ -14,3 +14,10 @@ blocks.
 ## PLC blocks (IEC 61131-3)
 
 ::: intrepyd.lib.plc
+
+## The catalogue
+
+Every block above, described as data for tools (the circuit editor's palette,
+`intrepyd.diagram`). `python -m intrepyd.diagram catalogue` prints it as JSON.
+
+::: intrepyd.lib.catalogue

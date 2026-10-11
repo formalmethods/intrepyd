@@ -6,8 +6,11 @@ Two submodules:
 - :mod:`intrepyd.lib.eda`: hardware/EDA blocks — a clock, a counter, latches,
   flip-flops, a shift register, a multiplexer.
 - :mod:`intrepyd.lib.plc`: the standard function blocks of IEC 61131-3, as a
-  PLC program uses them — edge detectors (R_TRIG, F_TRIG), bistables (SR, RS)
-  and an up counter (CTU).
+  PLC program uses them — edge detectors (R_TRIG, F_TRIG), bistables (SR, RS),
+  counters (CTU, CTD, CTUD) and timers (TON, TOF, TP).
+
+and :mod:`intrepyd.lib.catalogue`, which describes every block of both as data
+(its parameters, pins, outputs and types) for tools.
 
 API convention
 --------------

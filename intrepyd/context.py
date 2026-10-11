@@ -609,16 +609,18 @@ class Context:
         return engine.Pdr(self.ctx)
 
     def mk_portfolio(self, engines: Sequence[str] | None = None,
-                     max_depth: int | None = None) -> portfolio.Portfolio:
+                     max_depth: int | None = None,
+                     certificates: bool = False) -> portfolio.Portfolio:
         """
         Creates a portfolio: an engine that runs several engines in parallel,
         each in a process of its own, and stops them all at the first
         conclusive answer (see intrepyd.portfolio). ``engines`` defaults to all
-        of ``portfolio.ENGINES``.
+        of ``portfolio.ENGINES``; with ``certificates``, an UNREACHABLE answer
+        comes with a proof certificate.
         """
         if engines is None:
             engines = portfolio.ENGINES
-        return portfolio.Portfolio(self, engines, max_depth)
+        return portfolio.Portfolio(self, engines, max_depth, certificates)
 
     def mk_simulator(self) -> simulator.Simulator:
         """

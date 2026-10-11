@@ -62,7 +62,7 @@ fetch_intrepid:
 linter_python:
 	@$(PYTHON) -m pylint intrepyd
 
-# Static type checking of the annotated public API (#29 of intrepid-specs).
+# Static type checking of the annotated public API.
 # Needs no intrepid library: mypy reads the sources statically. The modules
 # it checks are configured under [tool.mypy] in pyproject.toml.
 typecheck_python:

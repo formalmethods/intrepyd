@@ -25,7 +25,8 @@ Diagram format (version 3)
       "verification": {     # optional: how Verify runs
         "engine": "portfolio",  # or one engine: bmc, kind, br, pdr
         "timeout": 30,          # seconds, per property
-        "depth": 50             # the deepest depth bmc and kind try (optional)
+        "depth": 50,            # the deepest depth bmc and kind try (optional)
+        "certificates": false   # proof certificates for what is proved (optional)
       }
     }
 
@@ -39,7 +40,17 @@ On top of the export's schema, a diagram has:
   (``in0``, ``in1``, ...), built as a chain of binary calls;
 - the properties to verify: ``"kind": "assertion"`` (its boolean input must
   always hold) and ``"kind": "target"`` (a boolean condition to reach), each
-  named, with one input ``in``.
+  named, with one input ``in``;
+- ``"kind": "subsystem"`` blocks, a part of the circuit drawn as one block: the
+  blocks inside it have ``"parent": <its id>`` (ids are unique in the whole
+  diagram, and a wire joins two blocks of one sub-system, or two at the top).
+  Its In blocks are its inputs, wired from outside by their name
+  (``"port": "<the In block's name>"``), and its Out blocks its outputs, in id
+  order (``"fromPort": 0, 1, ...``). Sub-systems nest. The names of the blocks
+  inside are prefixed with the sub-system's (``"filter.acc"``) when built.
+
+The library blocks are those of ``intrepyd.lib.catalogue``, which describes
+each one (its parameters, pins, outputs and types).
 
 Command line
 ------------
@@ -63,18 +74,31 @@ the trace prints them).
                   "trace": {"steps": N, "values": {...}, "stimuli": {...}}}, ...]}
 
 An assertion *holds* or *fails*; a target is *reached* or *unreachable*;
-*unknown* when no engine answers in time. A failing assertion or a reached
+*unknown* when no engine answers in time. With ``--certificates`` (or
+``"certificates": true``), a property that holds or a target unreachable also
+has a ``"certificate"``: the proof, an SMT-LIB 2 script each of whose
+``check-sat`` must answer ``unsat``, which any SMT solver can run to check it
+(``null`` when the engine that proved it gives none). The proof is checked by
+intrepid before it is given; one that does not hold makes the verdict
+*unknown*. Certificates need intrepid 1.4 or newer. A failing assertion or a reached
 target carries its trace: the inputs that lead there (``stimuli``, as the
 simulation section takes them) and every block's values along it, its last
 step being where the assertion fails or the target is reached.
 
-On an error both commands print the reason to standard error and exit with
+In a simulation, the outputs of a sub-system carry the values of its Out blocks.
+
+``python -m intrepyd.diagram catalogue`` prints the library blocks a diagram may
+use (``intrepyd.lib.catalogue``), as JSON.
+
+On an error the commands print the reason to standard error and exit with
 status 1.
 """
 
 import argparse
 import json
 import sys
+
+from intrepyd.lib import catalogue
 
 FORMAT = "intrepyd-diagram"
 VERSION = 3
@@ -93,48 +117,6 @@ _TYPE_MAKERS = {
 _UNARY = {"not", "minus"}
 _VARIADIC = {"and", "or", "xor", "add", "mul"}
 
-# The library blocks: how to call each one. A call argument is "ctx", "name",
-# ("in", port) a wired input, ("type", key) a type parameter or ("int", key) an
-# integer one. A function returns its outputs (a tuple when several); a class
-# is built, then closed with set_init_next(...), and its outputs are attributes.
-_IN = "in"
-_LIBRARY = {
-    "mk_mux": {"module": "eda", "ctor": ["ctx", (_IN, "sel"), (_IN, "in0"), (_IN, "in1")],
-               "name_kw": True, "outputs": 1},
-    "mk_clock": {"module": "eda", "ctor": ["ctx", "name"], "outputs": 2},
-    "mk_counter": {"module": "eda", "ctor": ["ctx", "name", ("type", "t"), (_IN, "limit")],
-                   "outputs": 2, "defaults": {"t": "int8"}},
-    "LatchD": {"module": "eda", "ctor": ["ctx", "name", ("type", "t")],
-               "setnext": [(_IN, "init"), (_IN, "d"), (_IN, "e")], "attrs": ["q"]},
-    "Delay": {"module": "eda", "ctor": ["ctx", "name", ("type", "t")],
-              "setnext": [(_IN, "init"), (_IN, "d")], "attrs": ["q"]},
-    "FlipFlopD": {"module": "eda", "ctor": ["ctx", "name", ("type", "t"), (_IN, "c")],
-                  "setnext": [(_IN, "init"), (_IN, "d")], "attrs": ["q"]},
-    "FlipFlopDE": {"module": "eda", "ctor": ["ctx", "name", ("type", "t"), (_IN, "c")],
-                   "setnext": [(_IN, "init"), (_IN, "d"), (_IN, "e")], "attrs": ["q"]},
-    "ShiftRegister": {"module": "eda", "ctor": ["ctx", "name", ("type", "t"), ("int", "length")],
-                      "setnext": [(_IN, "init"), (_IN, "d")], "attrs": ["q"],
-                      "defaults": {"length": "3"}},
-    "mk_r_trig": {"module": "plc", "ctor": ["ctx", (_IN, "clk"), "name"], "outputs": 1},
-    "mk_f_trig": {"module": "plc", "ctor": ["ctx", (_IN, "clk"), "name"], "outputs": 1},
-    "mk_sr": {"module": "plc", "ctor": ["ctx", (_IN, "s"), (_IN, "r"), "name"], "outputs": 1},
-    "mk_rs": {"module": "plc", "ctor": ["ctx", (_IN, "s"), (_IN, "r"), "name"], "outputs": 1},
-    "mk_ctu": {"module": "plc", "ctor": ["ctx", "name", (_IN, "cu"), (_IN, "reset"), (_IN, "pv"),
-                                         ("type", "typ")], "outputs": 2, "primary": 1},
-    "mk_ctd": {"module": "plc", "ctor": ["ctx", "name", (_IN, "cd"), (_IN, "load"), (_IN, "pv"),
-                                         ("type", "typ")], "outputs": 2, "primary": 1},
-    "mk_ctud": {"module": "plc", "ctor": ["ctx", "name", (_IN, "cu"), (_IN, "cd"), (_IN, "reset"),
-                                          (_IN, "load"), (_IN, "pv"), ("type", "typ")],
-                "outputs": 3, "primary": 1},
-    "mk_ton": {"module": "plc", "ctor": ["ctx", "name", (_IN, "in"), (_IN, "pt"), ("type", "typ")],
-               "outputs": 2, "primary": 1},
-    "mk_tof": {"module": "plc", "ctor": ["ctx", "name", (_IN, "in"), (_IN, "pt"), ("type", "typ")],
-               "outputs": 2, "primary": 1},
-    "mk_tp": {"module": "plc", "ctor": ["ctx", "name", (_IN, "in"), (_IN, "pt"), ("type", "typ")],
-              "outputs": 2, "primary": 1},
-}
-_TYPE_DEFAULTS = {"t": "bool", "typ": "int8"}
-
 
 class DiagramError(ValueError):
     """A diagram that cannot be built, with a reason a user can read."""
@@ -150,6 +132,7 @@ class Circuit:  # pylint: disable=too-few-public-methods
         self.inputs = inputs
         self.outputs = outputs
         self.properties = []  # (assertion or target block, the net it checks)
+        self.aliases = {}  # (sub-system id, output index) -> the Out block inside
 
 
 def load(source):
@@ -208,6 +191,10 @@ def simulate(diagram, steps=None, stimuli=None):
     simulator.simulate(trace, steps - 1)
     values = {f"{block}.{index}": [trace.get_value(net, d) for d in range(steps)]
               for (block, index), net in sorted(circuit.outputs.items())}
+    # a sub-system's outputs carry what its Out blocks inside do
+    for (block, index), out in sorted(circuit.aliases.items()):
+        if f"{out}.0" in values:
+            values[f"{block}.{index}"] = values[f"{out}.0"]
     return {"steps": steps, "values": values}
 
 
@@ -224,34 +211,44 @@ def _stimulus_value(value):
 ENGINES = ("portfolio", "bmc", "kind", "br", "pdr")
 
 
-def verify(diagram, engine=None, timeout=None, depth=None):
+def verify(diagram, engine=None, timeout=None, depth=None, certificates=None):  # pylint: disable=too-many-arguments,too-many-positional-arguments
     """Checks each property of a diagram (its assertion and target blocks) on its
     own, with ``engine`` (the portfolio, or one engine), ``timeout`` seconds each
     and, for bmc and kind, at most ``depth`` steps — by default the diagram's
     ``verification`` section. Returns ``{"results": [...]}`` (see the module
     documentation): a verdict per property, and the trace of a failing
-    assertion or a reached target."""
+    assertion or a reached target. With ``certificates``, a proved property
+    comes with its proof certificate."""
     section = diagram.get("verification") or {}
     engine = engine or section.get("engine", "portfolio")
     if engine not in ENGINES:
         raise DiagramError(f'unknown engine "{engine}"; one of {", ".join(ENGINES)}')
     timeout = float(timeout if timeout is not None else section.get("timeout", 30))
     depth = depth if depth is not None else section.get("depth")
+    if certificates is None:
+        certificates = section.get("certificates", False)
+    certificates = bool(certificates)
+    if certificates:
+        from intrepyd import api  # pylint: disable=import-outside-toplevel
+        if not api.HAS_CERTIFICATES:
+            raise DiagramError("proof certificates need intrepid 1.4 or newer, and the library "
+                               f"of this intrepyd is older ({api.LIBRARY_PATH})")
     circuit = build(diagram)
     if not circuit.properties:
         raise DiagramError("the circuit has no assertion and no target to verify")
     engines = None if engine == "portfolio" else [engine]
-    return {"results": [_check(diagram, circuit, node, net, (engines, depth, timeout))
+    return {"results": [_check(diagram, circuit, node, net, (engines, depth, timeout, certificates))
                         for node, net in circuit.properties]}
 
 
 def _check(diagram, circuit, node, net, how):  # pylint: disable=too-many-locals
     """One property's verdict (and trace), by its own run of the engines."""
     from intrepyd.engine import EngineResult  # pylint: disable=import-outside-toplevel
-    engines, depth, timeout = how
+    engines, depth, timeout, certificates = how
     assertion = node["kind"] == "assertion"
     target = circuit.ctx.mk_not(net) if assertion else net
-    portfolio = circuit.ctx.mk_portfolio(engines=engines, max_depth=depth)
+    portfolio = circuit.ctx.mk_portfolio(engines=engines, max_depth=depth,
+                                         certificates=certificates)
     portfolio.add_target(target)
     # the inputs, to replay the trace; the target too, which reaches the
     # failing step even in a circuit without inputs
@@ -265,6 +262,8 @@ def _check(diagram, circuit, node, net, how):  # pylint: disable=too-many-locals
         entry["trace"] = _replay(diagram, circuit, portfolio.get_last_trace())
     elif answer == EngineResult.UNREACHABLE:
         entry["verdict"] = "holds" if assertion else "unreachable"
+        if certificates:
+            entry["certificate"] = portfolio.get_last_certificate()
     else:
         entry["verdict"] = "unknown"
         errors = portfolio.get_last_errors()
@@ -289,16 +288,89 @@ def _replay(diagram, circuit, trace):
     return {"steps": steps, "values": simulated["values"], "stimuli": stimuli}
 
 
+# --- sub-systems -----------------------------------------------------------------------
+
+def _flatten(circuit):
+    """A circuit with sub-systems as one flat netlist: each sub-system's blocks
+    take its place, its In blocks become pass-throughs (``"via"``) of the wires
+    into its inputs, its Out blocks pass-throughs of what drives them, and the
+    wires out of it come from those. Returns the nodes, the edges and, for each
+    sub-system output ``(id, index)``, the Out block it is."""
+    nodes = {n["id"]: n for n in circuit.get("nodes", [])}
+    subsystems = {nid for nid, n in nodes.items() if n["kind"] == "subsystem"}
+    ports = {sid: {"input": [], "output": []} for sid in subsystems}
+    for node in sorted(nodes.values(), key=lambda n: n["id"]):
+        if node.get("parent") in subsystems and node["kind"] in ("input", "output"):
+            ports[node["parent"]][node["kind"]].append(node)
+    aliases = {(sid, index): out["id"]
+               for sid in subsystems for index, out in enumerate(ports[sid]["output"])}
+    edges = [_flat_edge(e, nodes, ports, aliases) for e in circuit.get("edges", [])]
+    edges = [edge for edge in edges if edge is not None]
+    flat = [_flat_node(node, nodes, subsystems) for node in nodes.values()
+            if node["kind"] != "subsystem"]
+    return flat, edges, aliases
+
+
+def _flat_edge(edge, nodes, ports, aliases):
+    """A wire of the flat netlist: from a sub-system, it leaves the Out block
+    inside; into a sub-system, it enters the In block of its port's name."""
+    if edge["from"] not in nodes or edge["to"] not in nodes:
+        return None
+    if edge["from"] in ports:
+        key = (edge["from"], edge.get("fromPort", 0))
+        if key not in aliases:
+            raise DiagramError(f"{_label(nodes[edge['from']])} has no output {key[1]}")
+        flat = {"from": aliases[key]}
+    else:
+        flat = {"from": edge["from"]}
+        if "fromPort" in edge:
+            flat["fromPort"] = edge["fromPort"]
+    if edge["to"] in ports:
+        into = [n for n in ports[edge["to"]]["input"] if n.get("name") == edge["port"]]
+        if not into:
+            raise DiagramError(f'{_label(nodes[edge["to"]])} has no input "{edge["port"]}"')
+        return {**flat, "to": into[0]["id"], "port": "in"}
+    return {**flat, "to": edge["to"], "port": edge["port"]}
+
+
+def _flat_node(node, nodes, subsystems):
+    """A block of the flat netlist: inside a sub-system, its name prefixed with
+    the sub-system's, and an In or Out block a pass-through."""
+    parent = node.get("parent")
+    if parent is None:
+        return node
+    if parent not in subsystems:
+        raise DiagramError(f"{_label(node)} is inside block {parent}, which is not a sub-system")
+    copy = dict(node)
+    if node.get("name"):
+        copy["name"] = f"{_path(nodes, parent)}.{node['name']}"
+    if node["kind"] in ("input", "output"):
+        copy["kind"] = "via"
+        copy["port_of"] = (_label(nodes[parent]), node["kind"], node.get("name"))
+    return copy
+
+
+def _path(nodes, sid):
+    """The dotted names of the sub-systems down to ``sid``."""
+    names = []
+    while sid is not None:
+        node = nodes[sid]
+        names.append(node.get("name") or f"subsystem_{sid}")
+        sid = node.get("parent")
+    return ".".join(reversed(names))
+
+
 # --- the builder ---------------------------------------------------------------------
 
 class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
     def __init__(self, diagram, ctx):
-        circuit = diagram.get("circuit") or {}
+        nodes, edges, aliases = _flatten(diagram.get("circuit") or {})
         self.ctx = ctx
-        self.nodes = {n["id"]: n for n in circuit.get("nodes", [])}
+        self.nodes = {n["id"]: n for n in nodes}
+        self.aliases = aliases
         self.into = {}
-        for edge in circuit.get("edges", []):
+        for edge in edges:
             self.into.setdefault(edge["to"], {})[edge["port"]] = edge
         self.types = {}
         self.outputs = {}
@@ -314,6 +386,7 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             self._close(node)
         circuit = Circuit(self.ctx, self.inputs, self.outputs)
         circuit.properties = self.properties
+        circuit.aliases = self.aliases
         return circuit
 
     # -- what a block is ----------------------------------------------------------------
@@ -322,12 +395,10 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         kind = node["kind"]
         if kind == "latch":
             return ["init", "next"]
-        if kind in ("output", "assertion", "target"):
+        if kind in ("output", "assertion", "target", "via"):
             return ["in"]
         if kind == "component":
-            spec = self._spec(node)
-            return [a[1] for a in spec["ctor"] + spec.get("setnext", [])
-                    if isinstance(a, tuple) and a[0] == _IN]
+            return [pin["port"] for pin in self._spec(node)["inputs"]]
         if kind == "gate":
             op = node.get("op", "")
             if op == "ite":
@@ -343,11 +414,11 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if node["kind"] == "latch":
             return {"init", "next"}
         if node["kind"] == "component":
-            return {a[1] for a in self._spec(node).get("setnext", []) if isinstance(a, tuple)}
+            return {pin["port"] for pin in self._spec(node)["inputs"] if pin["at"] == "setnext"}
         return set()
 
     def _spec(self, node):
-        spec = _LIBRARY.get(node.get("symbol"))
+        spec = catalogue.find(node.get("symbol"))
         if spec is None:
             raise DiagramError(f'{_label(node)}: unknown library block "{node.get("symbol")}"')
         return spec
@@ -392,10 +463,17 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             self.types[name] = getattr(self.ctx, maker)()
         return self.types[name]
 
-    def _input(self, node, port):
-        """The net wired into a block's input."""
+    def _input(self, node, port, optional=False):
+        """The net wired into a block's input (None for an optional one unwired)."""
         edge = self.into.get(node["id"], {}).get(port)
         if edge is None:
+            if optional:
+                return None
+            if node["kind"] == "via":
+                where, kind, name = node["port_of"]
+                if kind == "input":
+                    raise DiagramError(f'{where}: input "{name}" is not wired')
+                raise DiagramError(f'{where}: its output "{name}" is not connected inside')
             raise DiagramError(f'{_label(node)}: input "{port}" is not wired')
         source = self.nodes.get(edge["from"])
         if source is None:
@@ -415,6 +493,8 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if kind == "input":
             net = ctx.mk_input(name, self._type(node.get("type", "bool")))
             self.inputs[nid] = net
+        elif kind == "via":
+            net = self._input(node, "in")
         elif kind == "latch":
             net = ctx.mk_latch(name, self._type(node.get("type", "bool")))
         elif kind == "const":
@@ -456,36 +536,49 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         spec = self._spec(node)
         module = __import__(f"intrepyd.lib.{spec['module']}", fromlist=[node["symbol"]])
         call = getattr(module, node["symbol"])
-        args, kwargs = [], {}
-        for arg in spec["ctor"]:
-            args.append(self._argument(node, spec, arg))
-        if spec.get("name_kw") and node.get("name"):
+        args, kwargs = self._arguments(node, spec, spec["ctorArgs"])
+        if spec.get("nameAsKeyword") and node.get("name"):
             kwargs["name"] = node["name"]
         result = call(*args, **kwargs)
         nid = node["id"]
-        if "attrs" in spec:
+        if spec["form"] == "class":
             self.objects[nid] = result
-            for index, attr in enumerate(spec["attrs"]):
-                self.outputs[(nid, index)] = getattr(result, attr)
-        elif spec["outputs"] == 1:
+            for index, out in enumerate(spec["outputs"]):
+                self.outputs[(nid, index)] = getattr(result, out["name"])
+        elif len(spec["outputs"]) == 1:
             self.outputs[(nid, 0)] = result
         else:
             for index, net in enumerate(result):
                 self.outputs[(nid, index)] = net
 
+    def _arguments(self, node, spec, call):
+        """The positional and keyword arguments of a library call; an optional
+        input passed by keyword is left out while it is not wired."""
+        optional = {pin["port"] for pin in spec["inputs"] if pin.get("optional")}
+        args, kwargs = [], {}
+        for arg in call:
+            if arg.get("keyword"):
+                net = self._input(node, arg["port"], optional=arg["port"] in optional)
+                if net is not None:
+                    kwargs[arg["keyword"]] = net
+            else:
+                args.append(self._argument(node, spec, arg))
+        return args, kwargs
+
     def _argument(self, node, spec, arg):
-        params = node.get("params") or {}
-        defaults = {**_TYPE_DEFAULTS, **spec.get("defaults", {})}
-        if arg == "ctx":
+        kind = arg["kind"]
+        if kind == "ctx":
             return self.ctx
-        if arg == "name":
+        if kind == "name":
             return node.get("name") or f"{node['symbol']}_{node['id']}"
-        kind, key = arg
-        if kind == _IN:
-            return self._input(node, key)
+        if kind == "input":
+            return self._input(node, arg["port"])
+        params = node.get("params") or {}
+        default = next((p["default"] for p in spec["params"] if p["key"] == arg["key"]), None)
+        value = params.get(arg["key"], default)
         if kind == "type":
-            return self._type(params.get(key, defaults.get(key, "bool")))
-        return int(params.get(key, defaults.get(key, "1")))
+            return self._type(value or "bool")
+        return int(value if value is not None else 1)
 
     def _close(self, node):
         """Feedback and outputs, once every net exists."""
@@ -494,21 +587,22 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             latch = self.outputs[(node["id"], 0)]
             self.ctx.set_latch_init_next(latch, self._input(node, "init"),
                                          self._input(node, "next"))
-        elif kind == "component" and "setnext" in self._spec(node):
+        elif kind == "component" and self._spec(node).get("setnextArgs"):
             spec = self._spec(node)
-            obj = self.objects[node["id"]]
-            obj.set_init_next(*[self._argument(node, spec, arg) for arg in spec["setnext"]])
+            args, kwargs = self._arguments(node, spec, spec["setnextArgs"])
+            self.objects[node["id"]].set_init_next(*args, **kwargs)
         elif kind == "output":
             self.ctx.mk_output(self._input(node, "in"), node.get("name"))
         elif kind in ("assertion", "target"):
             self.properties.append((node, self._input(node, "in")))
-        if node.get("output") and kind != "output":
+        if node.get("output") and kind not in ("output", "via"):
             self.ctx.mk_output(self.outputs[(node["id"], 0)], node.get("name"))
 
 
 def _primary(node):
     if node.get("kind") == "component":
-        return _LIBRARY.get(node.get("symbol"), {}).get("primary", 0)
+        spec = catalogue.find(node.get("symbol"))
+        return spec["primary"] if spec else 0
     return 0
 
 
@@ -522,7 +616,7 @@ def _label(node):
 # --- command line ------------------------------------------------------------------------
 
 def main(argv=None):
-    """``python -m intrepyd.diagram simulate|verify FILE|- [options]``"""
+    """``python -m intrepyd.diagram simulate|verify FILE|- [options]``, or ``catalogue``"""
     parser = argparse.ArgumentParser(prog="python -m intrepyd.diagram",
                                      description="Simulate or verify an intrepyd circuit diagram.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -534,11 +628,18 @@ def main(argv=None):
     ver.add_argument("--engine", choices=ENGINES, help="default: the diagram's, else portfolio")
     ver.add_argument("--timeout", type=float, help="seconds per property (default: 30)")
     ver.add_argument("--depth", type=int, help="the deepest depth bmc and kind try")
+    ver.add_argument("--certificates", action="store_true", default=None,
+                     help="give each proved property its proof certificate, as SMT-LIB 2")
+    sub.add_parser("catalogue", help="print the library blocks a diagram may use, as JSON")
     args = parser.parse_args(argv)
+    if args.command == "catalogue":
+        sys.stdout.write(json.dumps(catalogue.catalogue()) + "\n")
+        return 0
     try:
         diagram = load(sys.stdin if args.diagram == "-" else args.diagram)
         if args.command == "verify":
-            result = verify(diagram, engine=args.engine, timeout=args.timeout, depth=args.depth)
+            result = verify(diagram, engine=args.engine, timeout=args.timeout, depth=args.depth,
+                            certificates=args.certificates)
         else:
             result = simulate(diagram, steps=args.steps)
     except Exception as err:  # pylint: disable=broad-except  # reported, not raised, to the editor
