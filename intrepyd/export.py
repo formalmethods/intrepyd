@@ -96,10 +96,16 @@ for _cast in ("int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "u
 def to_graph(context):
     """The circuit of ``context`` as a JSON-able dict following the schema above."""
     recipe = context.recipe
-    # Each call that returned a net is recorded in the recipe as ('net', idx);
-    # invert that to map a call index back to the net it produced.
-    refs = recipe._refs  # pylint: disable=protected-access
-    idx2net = {ref[1]: net for net, ref in refs.items() if ref[0] == "net"}
+    # The net each call produced. The recipe records it per call; inverting its
+    # references instead would lose every call but the last that returned a
+    # given net (mk_true() called twice, or an expression the library shares),
+    # and with it the wires that use the earlier calls.
+    results = getattr(recipe, "results", None)
+    if results is not None and len(results) == len(recipe.calls):
+        idx2net = {idx: net for idx, net in enumerate(results) if net is not None}
+    else:
+        refs = recipe._refs  # pylint: disable=protected-access
+        idx2net = {ref[1]: net for net, ref in refs.items() if ref[0] == "net"}
 
     # The source location of the net each call produced (recipe.locations is
     # aligned with recipe.calls by index), when the recipe recorded it.
@@ -205,6 +211,7 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
         ensure(src)
         edges.append({"from": src, "to": dst, "port": port})
 
+    produced = set()
     for idx, (method, args, _kwargs) in enumerate(calls):
         net = idx2net.get(idx)
 
@@ -216,6 +223,16 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
             continue
         if method == "mk_output" or net is None:
             continue  # outputs are flagged from context.outputs; ignore other non-net calls
+        if net in produced:
+            # The library returned a net built before: an expression it shares
+            # (the same gate on the same inputs) or simplifies (and(true, x) is
+            # x). The net is defined by the first call; this one is an alias,
+            # and its uses are wires from that net.
+            continue
+        produced.add(net)
+        if net in predefined:
+            ensure(net)  # mk_true(), or an expression simplified to true/false
+            continue
         if method == "mk_input":
             node(net, "input", type_=_type_name(args[1]))
             continue
@@ -224,10 +241,6 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
             continue
         if method == "mk_number":
             node(net, "const", type_=_type_name(args[1]), value=str(args[0][1]))
-            continue
-        if method in ("mk_true", "mk_false"):
-            label = method[3:]
-            node(net, "const", op=label, value=label)
             continue
 
         op = method[3:] if method.startswith("mk_") else method
@@ -238,6 +251,12 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
     for net in output_nets:
         ensure(net)
         nodes[net]["output"] = True
+
+    # A true/false that nothing reads (its uses simplified away by the library)
+    # is not part of the circuit.
+    touched = {e["from"] for e in edges} | {e["to"] for e in edges}
+    for net in [n for n in nodes if n in predefined and n not in touched and n not in output_nets]:
+        del nodes[net]
 
     return {"version": 2,
             "nodes": [nodes[net] for net in sorted(nodes)],

@@ -31,10 +31,12 @@ export = _load_export()
 
 
 class _Recipe:
-    def __init__(self, calls, refs, locations=None):
+    def __init__(self, calls, refs, locations=None, results=None):
         self.calls = calls
         self._refs = refs
         self.locations = locations or []
+        if results is not None:
+            self.results = results
 
 
 class _FakeContext:
@@ -167,6 +169,49 @@ class ExportTest(unittest.TestCase):
         nodes = {n["id"]: n for n in export.to_graph(ctx)["nodes"]}
         self.assertEqual((nodes[101]["file"], nodes[101]["line"]), ("/p/prog.py", 5))
         self.assertEqual((nodes[103]["file"], nodes[103]["line"]), ("/p/prog.py", 7))
+
+    def test_a_net_returned_by_several_calls_keeps_all_its_wires(self):
+        # mk_true() twice returns the same net; each latch's init uses a
+        # different call, but both are wires from that one net.
+        calls = [
+            ("mk_latch", (("value", "p"), ("attr", "booleantype")), {}),        # 0 -> 101
+            ("mk_latch", (("value", "q"), ("attr", "booleantype")), {}),        # 1 -> 102
+            ("mk_true", (), {}),                                                # 2 -> 1
+            ("mk_false", (), {}),                                               # 3 -> 2
+            ("set_latch_init_next", (("net", 0), ("net", 2), ("net", 3)), {}),  # 4
+            ("mk_true", (), {}),                                                # 5 -> 1 again
+            ("set_latch_init_next", (("net", 1), ("net", 5), ("net", 0)), {}),  # 6
+        ]
+        # the recipe's references keep only the last call that returned net 1
+        refs = {101: ("net", 0), 102: ("net", 1), 1: ("net", 5), 2: ("net", 3), 3: ("attr", "undef")}
+        results = [101, 102, 1, 2, None, 1, None]
+        ctx = _FakeContext(calls, refs, {101: "p", 102: "q"}, {})
+        ctx.recipe = _Recipe(calls, refs, results=results)
+        edges = {(e["from"], e["to"], e["port"]) for e in export.to_graph(ctx)["edges"]}
+        self.assertIn((1, 101, "init"), edges)  # through the first mk_true()
+        self.assertIn((1, 102, "init"), edges)  # through the second
+        self.assertIn((2, 101, "next"), edges)
+
+    def test_a_call_the_library_simplifies_is_an_alias_not_a_gate(self):
+        # and(true, x) is x: the library returns x's net, so there is no AND
+        calls = [
+            ("mk_input", (("value", "x"), ("attr", "booleantype")), {}),  # 0 -> 101
+            ("mk_input", (("value", "y"), ("attr", "booleantype")), {}),  # 1 -> 102
+            ("mk_lt", (("net", 0), ("net", 1)), {}),                       # 2 -> 103
+            ("mk_true", (), {}),                                           # 3 -> 1
+            ("mk_and", (("net", 3), ("net", 2)), {}),                      # 4 -> 103 again
+            ("mk_not", (("net", 4),), {}),                                 # 5 -> 104
+        ]
+        refs = {101: ("net", 0), 102: ("net", 1), 103: ("net", 4), 104: ("net", 5), 1: ("net", 3)}
+        ctx = _FakeContext(calls, refs, {101: "x", 102: "y"}, {})
+        ctx.recipe = _Recipe(calls, refs, results=[101, 102, 103, 1, 103, 104])
+        graph = export.to_graph(ctx)
+        nodes = {n["id"]: n for n in graph["nodes"]}
+        self.assertEqual(nodes[103]["op"], "lt")  # the net is the comparison, not an AND
+        into = lambda net: sorted((e["from"], e["port"]) for e in graph["edges"] if e["to"] == net)
+        self.assertEqual(into(103), [(101, "a"), (102, "b")])  # no second driver, no self-loop
+        self.assertEqual(into(104), [(103, "in")])  # the NOT reads the comparison
+        self.assertNotIn(1, nodes)  # the true that only the simplified AND read is gone
 
     def test_missing_location_is_omitted(self):
         # a None in locations (intrepyd could not find the caller) -> no file/line

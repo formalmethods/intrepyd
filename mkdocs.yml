@@ -79,6 +79,7 @@ nav:
       - Component library: reference/library.md
       - Test generation: reference/atg.md
       - Export: reference/export.md
+      - Diagram: reference/diagram.md
       - Parser: reference/parser.md
       - Simulink: reference/simulink.md
       - Remote: reference/remote.md

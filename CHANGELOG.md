@@ -4,8 +4,21 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.20.0
+
+Bump version
+
 ## 0.19.0
 
+- **`intrepyd.diagram`: build and simulate circuit diagrams**, the documents
+  (`*.intrepyd.json`) of the intrepid-vscode circuit editor. It is the inverse
+  of `intrepyd.export`: `build()` turns a diagram into a `Context` — gates,
+  gates with more than two inputs (chained), switches, casts, latches, the
+  blocks of `intrepyd.lib` and their several outputs, Out blocks — and
+  `simulate()` runs its stimuli and returns every block's value at every step.
+  `python -m intrepyd.diagram simulate FILE` (or `-` for standard input) prints
+  the result as JSON, for the editor to show. See the module's documentation
+  for the format.
 - Export schema version 2: each node carries the source `file` and `line` that
   built the net (when the recipe recorded it), so a viewer can jump from a
   block to the line of python that created it. Version 1 is the same without
@@ -16,6 +29,15 @@ one, and the section becomes the notes of the GitHub release.
   two different types), instead of letting an internal solver sort-mismatch
   surface. The check is conservative — it fires only when the operand types are
   known and clearly incompatible, so it never rejects a valid circuit.
+- **Export fix: wires to shared or simplified nets.** When several calls return
+  the same net, as `mk_true()` called twice, an expression the library builds
+  once, or one it simplifies (`mk_and(ctx.mk_true(), x)` is `x`), the export
+  lost the wires that used all but the last of those calls (a latch's initial
+  value went missing), or turned the simplified call into a gate of its own
+  (an AND on top of `x`, with doubled inputs and a loop). The recipe now
+  records the net each call returned (`Recipe.results`), and the export defines
+  a net by the first call that built it and treats the later ones as aliases.
+  It also leaves out a `true`/`false` that nothing reads.
 - The export can carry a **trace**: when the program also builds a simulation or
   a counterexample, `intrepyd.export` adds a `"trace"` with each watched net's
   value at each step, so a viewer can overlay the values on the blocks over

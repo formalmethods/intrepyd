@@ -53,6 +53,12 @@ class Recipe:
         # index; None where it could not be found. Used by the export to map a
         # net to the line of source that built it; ignored by replay().
         self.locations = []
+        # The net each call in self.calls returned (None for no net), aligned
+        # by index. Several calls may return the same net (mk_true() twice, or
+        # an expression the library builds once), and _refs only remembers the
+        # last of them, so this is how the export finds the net of every call.
+        # Ignored by replay().
+        self.results = []
         self._refs = {net: ('attr', name)
                       for name in NET_ATTRIBUTES
                       for net in [getattr(context, name)]}
@@ -72,6 +78,8 @@ class Recipe:
                            tuple(self._reference(arg) for arg in args),
                            {key: self._reference(value) for key, value in kwargs.items()}))
         self.locations.append(_caller_location())
+        is_net = isinstance(result, int) and not isinstance(result, bool)
+        self.results.append(result if is_net else None)
         if isinstance(result, int):
             self._refs[result] = ('net', len(self.calls) - 1)
 
