@@ -4,6 +4,27 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.22.0
+
+- **MC/DC tests for circuit diagrams.** `intrepyd.diagram.conditions(doc,
+  decision)` finds a decision's conditions, walking back from its block
+  through the boolean operators and the pins of sub-systems to the first nets
+  that are none of them (inputs, latches, comparisons, library blocks' outputs,
+  or blocks named in `stops`); `intrepyd.diagram.mcdc(doc, decisions)` and
+  `python -m intrepyd.diagram mcdc FILE` (`--decision`, `--depth`,
+  `--timeout`, or the diagram's new `testgen` section) generate a pair of
+  tests per condition (masking MC/DC) on two copies of the circuit, each
+  searched by the portfolio, and give each test as a run (its inputs, every
+  block's values) with its conditions and decision at its last step, and each
+  condition as covered, unreachable or unknown. The intrepid-vscode editor runs
+  it.
+- `intrepyd.diagram.Circuit` has `input_types`, the type of each input block.
+- The trace of a failing assertion or a reached target (`intrepyd.diagram
+  verify`) gives a concrete value to each input the engine leaves free
+  (false, or 0), where it gave none: the trace is replayed as it is, and an
+  input with no value at a step but one later no longer crashes the
+  simulator of intrepid up to 1.5.0.
+
 ## 0.21.0
 
 - **The catalogue of `intrepyd.lib`**, `intrepyd.lib.catalogue`: every library

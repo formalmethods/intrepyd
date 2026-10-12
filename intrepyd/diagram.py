@@ -27,6 +27,11 @@ Diagram format (version 3)
         "timeout": 30,          # seconds, per property
         "depth": 50,            # the deepest depth bmc and kind try (optional)
         "certificates": false   # proof certificates for what is proved (optional)
+      },
+      "testgen": {          # optional: the MC/DC tests to generate
+        "decisions": [{"block": 7, "stops": [5]}, ...],
+        "timeout": 30,          # seconds, per condition
+        "depth": 20             # the longest test, in steps after the first
       }
     }
 
@@ -87,6 +92,37 @@ step being where the assertion fails or the target is reached.
 
 In a simulation, the outputs of a sub-system carry the values of its Out blocks.
 
+``python -m intrepyd.diagram mcdc FILE`` generates MC/DC tests (Modified
+Condition / Decision Coverage) for the decisions of the diagram's ``testgen``
+section (``--decision ID``, repeated, ``--depth`` and ``--timeout`` override
+it). A decision is a block with a boolean output (an Out, Assertion or Target
+block stands for what is wired into it); its *conditions* are found by walking
+back from it through the boolean operators (and, or, not, xor, iff, implies,
+ite) and the pins of sub-systems, down to the first net that is none of them:
+an input, a latch, a comparison, the output of a library block, or a block
+listed in the decision's ``"stops"``. Constants are not conditions, and a net
+reached twice is one condition. For each condition, the tests are a pair that
+shows it alone decides the outcome (masking MC/DC): the condition and the
+decision differ between the two tests, and in each the decision would change
+if the condition did. It prints::
+
+    {"criterion": "masking", "results": [{
+        "decision": id, "name": "and1",
+        "conditions": [{"block": id, "output": 0, "name": "in1",
+                        "status": "covered" | "unreachable" | "unknown",
+                        "pair": [0, 1], "engine": "bmc", "time": 0.1}, ...],
+        "tests": [{"steps": N, "stimuli": {...}, "values": {...},
+                   "conditions": ["T", "F", ...], "decision": "T"}, ...],
+        "covered": 2, "total": 2}, ...]}
+
+Each test is a run of the circuit (its inputs at each step, as stimuli, and
+every block's values along it, as a simulation gives them); its conditions
+and its decision are read at its last step. A condition is *unreachable* when
+no pair of tests can show it decides the decision (it is masked, or the logic
+around it is redundant), *unknown* when none was found within the depth and
+the timeout. The tests are not a minimal set: two conditions may share a test
+only when they happen to.
+
 ``python -m intrepyd.diagram catalogue`` prints the library blocks a diagram may
 use (``intrepyd.lib.catalogue``), as JSON.
 
@@ -133,6 +169,7 @@ class Circuit:  # pylint: disable=too-few-public-methods
         self.outputs = outputs
         self.properties = []  # (assertion or target block, the net it checks)
         self.aliases = {}  # (sub-system id, output index) -> the Out block inside
+        self.input_types = {}  # input block id -> its type's name
 
 
 def load(source):
@@ -276,16 +313,185 @@ def _replay(diagram, circuit, trace):
     """A counterexample as the editor shows it: the inputs at each step (as
     stimuli), and every block's values along it, by simulating those inputs."""
     steps = trace.get_max_depth() + 1
+    stimuli = _stimuli(circuit, trace, steps)
+    simulated = simulate(diagram, steps=steps, stimuli=stimuli)
+    return {"steps": steps, "values": simulated["values"], "stimuli": stimuli}
+
+
+def _stimuli(circuit, trace, steps):
+    """The inputs of ``circuit`` along a trace an engine found, as stimuli. An
+    input the trace leaves free (what is found holds whatever it is) takes
+    false, or 0: the stimuli are concrete, and have no gap (an input with no
+    value at a step but one at a later step, which crashes the simulator of
+    the intrepid libraries up to 1.5.0)."""
     stimuli = {}
     for block, net in circuit.inputs.items():
+        free = "false" if circuit.input_types.get(block, "bool") == "bool" else "0"
         row = []
         for depth in range(steps):
             value = trace.get_value(net, depth)
             row.append("true" if value == "T" else "false" if value == "F"
-                       else "" if value == "?" else value)
+                       else free if value == "?" else value)
         stimuli[str(block)] = row
-    simulated = simulate(diagram, steps=steps, stimuli=stimuli)
-    return {"steps": steps, "values": simulated["values"], "stimuli": stimuli}
+    return stimuli
+
+
+# --- MC/DC test generation ----------------------------------------------------------------
+
+CRITERION = "masking"
+
+# The operators a decision is walked back through: the rest are conditions.
+_BOOLEAN_OPS = {"and", "or", "not", "xor", "iff", "implies", "ite"}
+
+
+def conditions(diagram, decision, stops=()):
+    """The conditions of a decision: walking back from block ``decision``
+    through the boolean operators and the pins of sub-systems, the first nets
+    that are none of them, or blocks of ``stops`` (see the module
+    documentation). Returns ``[{"block": id, "output": index, "name": ...}]``,
+    in the order they are met, the inputs of a block in pin order."""
+    nodes, into, _ = _netlist(diagram)
+    start = _decision_source(nodes, into, decision)
+    return [{"block": nid, "output": index, "name": _net_name(nodes[nid])}
+            for nid, index in _walk(nodes, into, start, set(stops))]
+
+
+def _decision_source(nodes, into, decision):
+    """The net a decision block stands for, as (block id, output index)."""
+    node = nodes.get(decision)
+    if node is None:
+        raise DiagramError(f"no block {decision} to be a decision (a sub-system is not one: "
+                           "pick a block inside it, or the block it drives)")
+    if node["kind"] in ("output", "assertion", "target"):
+        return _source(nodes, into, node, "in")
+    return (decision, _primary(node))
+
+
+def _source(nodes, into, node, port):
+    edge = into.get(node["id"], {}).get(port)
+    if edge is None or edge["from"] not in nodes:
+        raise DiagramError(f'{_label(node)}: input "{port}" is not wired')
+    return (edge["from"], edge.get("fromPort", _primary(nodes[edge["from"]])))
+
+
+def _walk(nodes, into, start, stops):
+    found, seen, pending = [], set(), [start]
+    while pending:
+        key = pending.pop()
+        if key in seen:
+            continue
+        seen.add(key)
+        node = nodes[key[0]]
+        if key != start and key[0] in stops:
+            found.append(key)
+        elif node["kind"] == "via":
+            pending.append(_source(nodes, into, node, "in"))
+        elif node["kind"] == "gate" and node.get("op") in _BOOLEAN_OPS:
+            # depth first, the first pin first
+            pending.extend(reversed([_source(nodes, into, node, p) for p in _gate_ports(node)]))
+        elif node["kind"] != "const":
+            found.append(key)
+    return found
+
+
+def _net_name(node):
+    return node.get("name") or _label(node)
+
+
+def mcdc(diagram, decisions=None, depth=None, timeout=None):
+    """Generates MC/DC tests for ``decisions`` (block ids, or ``{"block": id,
+    "stops": [...]}``), by default those of the diagram's ``testgen`` section,
+    each test at most ``depth`` steps after the first, ``timeout`` seconds per
+    condition. Returns ``{"criterion": "masking", "results": [...]}`` (see the
+    module documentation)."""
+    section = diagram.get("testgen") or {}
+    entries = decisions if decisions is not None else section.get("decisions", [])
+    entries = [e if isinstance(e, dict) else {"block": e} for e in entries]
+    if not entries:
+        raise DiagramError("choose a decision to generate MC/DC tests for")
+    depth = int(depth if depth is not None else section.get("depth", 20))
+    timeout = float(timeout if timeout is not None else section.get("timeout", 30))
+    return {"criterion": CRITERION,
+            "results": [_mcdc_decision(diagram, int(e["block"]), e.get("stops", ()),
+                                       (depth, timeout)) for e in entries]}
+
+
+def _mcdc_decision(diagram, decision, stops, how):  # pylint: disable=too-many-locals
+    """The tests of one decision: a pair per condition, searched on two copies
+    of the circuit, A and B, side by side."""
+    from intrepyd.context import Context  # pylint: disable=import-outside-toplevel
+    from intrepyd.engine import EngineResult  # pylint: disable=import-outside-toplevel
+    depth, timeout = how
+    nodes, into, _ = _netlist(diagram)
+    key = _decision_source(nodes, into, decision)
+    found = _walk(nodes, into, key, set(stops))
+    ctx = Context()
+    a = _copy(diagram, ctx, "A")
+    b = _copy(diagram, ctx, "B")
+    if a.outputs.get(key) is None:
+        raise DiagramError(f"{_label(nodes[decision])} has no output to be a decision")
+    type_ = ctx._net2type.get(a.outputs[key])  # pylint: disable=protected-access
+    if type_ is not None and type_ != ctx.mk_boolean_type():
+        raise DiagramError(f"{_label(nodes[decision])} is not a boolean: it cannot be a decision")
+    tests, index = [], {}
+    rows = []
+    for cond in found:
+        objective = _objective(ctx, a.outputs[key], b.outputs[key],
+                               a.outputs[cond], b.outputs[cond])
+        portfolio = ctx.mk_portfolio(max_depth=depth)
+        portfolio.add_target(objective)
+        for net in [*a.inputs.values(), *b.inputs.values(), objective]:
+            portfolio.add_watch(net)
+        answer = portfolio.reach_targets(timeout=timeout)
+        row = {"block": cond[0], "output": cond[1], "name": _net_name(nodes[cond[0]]),
+               "engine": portfolio.get_last_engine(), "time": round(portfolio.get_last_time(), 3)}
+        if answer == EngineResult.REACHABLE:
+            trace = portfolio.get_last_trace()
+            pair = [_test(diagram, copy, trace, (key, found), (tests, index)) for copy in (a, b)]
+            row.update(status="covered", pair=pair)
+        else:
+            row["status"] = "unreachable" if answer == EngineResult.UNREACHABLE else "unknown"
+        rows.append(row)
+    return {"decision": decision, "name": _net_name(nodes[decision]), "conditions": rows,
+            "tests": tests, "covered": sum(r["status"] == "covered" for r in rows),
+            "total": len(rows)}
+
+
+def _copy(diagram, ctx, name):
+    """The diagram built in ``ctx`` under namespace ``name``."""
+    ctx.push_namespace(name)
+    circuit = build(diagram, ctx)
+    ctx.pop_namespace()
+    return circuit
+
+
+def _objective(ctx, dec_a, dec_b, cond_a, cond_b):
+    """The two copies differ in the condition and in the decision, and in each
+    the decision would change with the condition (it is not masked)."""
+    def decides(dec, cond):
+        return ctx.mk_neq(ctx.mk_substitute(dec, ctx.mk_not(cond), cond), dec)
+    return ctx.mk_and(ctx.mk_and(ctx.mk_neq(cond_a, cond_b), ctx.mk_neq(dec_a, dec_b)),
+                      ctx.mk_and(decides(dec_a, cond_a), decides(dec_b, cond_b)))
+
+
+def _test(diagram, copy, trace, what, table):
+    """The test one copy runs in a trace, as an index in ``tests`` (the same
+    run twice is one test): its inputs replayed on the diagram, its conditions
+    and its decision at its last step. An input the trace leaves free (the
+    objective holds whatever it is) takes false, or 0: a test is concrete."""
+    key, found = what
+    tests, index = table
+    steps = trace.get_max_depth() + 1
+    stimuli = _stimuli(copy, trace, steps)
+    seen = json.dumps([steps, stimuli], sort_keys=True)
+    if seen not in index:
+        values = simulate(diagram, steps=steps, stimuli=stimuli)["values"]
+        def last(k):
+            return values.get(f"{k[0]}.{k[1]}", ["?"])[-1]
+        index[seen] = len(tests)
+        tests.append({"steps": steps, "stimuli": stimuli, "values": values,
+                      "conditions": [last(c) for c in found], "decision": last(key)})
+    return index[seen]
 
 
 # --- sub-systems -----------------------------------------------------------------------
@@ -360,18 +566,33 @@ def _path(nodes, sid):
     return ".".join(reversed(names))
 
 
+def _netlist(diagram):
+    """The flat netlist of a diagram: its blocks by id, the wire into each
+    block's input (``into[id][port]``) and the sub-system outputs' Out blocks."""
+    nodes, edges, aliases = _flatten(diagram.get("circuit") or {})
+    into = {}
+    for edge in edges:
+        into.setdefault(edge["to"], {})[edge["port"]] = edge
+    return {n["id"]: n for n in nodes}, into, aliases
+
+
+def _gate_ports(node):
+    op = node.get("op", "")
+    if op == "ite":
+        return ["if", "then", "else"]
+    if op in _UNARY or op.startswith("cast_to_"):
+        return ["in"]
+    count = node.get("inputs", 2) if op in _VARIADIC else 2
+    return [f"in{i}" for i in range(count)] if count > 2 else ["a", "b"]
+
+
 # --- the builder ---------------------------------------------------------------------
 
 class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attributes
 
     def __init__(self, diagram, ctx):
-        nodes, edges, aliases = _flatten(diagram.get("circuit") or {})
+        self.nodes, self.into, self.aliases = _netlist(diagram)
         self.ctx = ctx
-        self.nodes = {n["id"]: n for n in nodes}
-        self.aliases = aliases
-        self.into = {}
-        for edge in edges:
-            self.into.setdefault(edge["to"], {})[edge["port"]] = edge
         self.types = {}
         self.outputs = {}
         self.inputs = {}
@@ -387,6 +608,7 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         circuit = Circuit(self.ctx, self.inputs, self.outputs)
         circuit.properties = self.properties
         circuit.aliases = self.aliases
+        circuit.input_types = {nid: self.nodes[nid].get("type", "bool") for nid in self.inputs}
         return circuit
 
     # -- what a block is ----------------------------------------------------------------
@@ -400,13 +622,7 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         if kind == "component":
             return [pin["port"] for pin in self._spec(node)["inputs"]]
         if kind == "gate":
-            op = node.get("op", "")
-            if op == "ite":
-                return ["if", "then", "else"]
-            if op in _UNARY or op.startswith("cast_to_"):
-                return ["in"]
-            count = node.get("inputs", 2) if op in _VARIADIC else 2
-            return [f"in{i}" for i in range(count)] if count > 2 else ["a", "b"]
+            return _gate_ports(node)
         return []
 
     def _deferred(self, node):
@@ -616,7 +832,7 @@ def _label(node):
 # --- command line ------------------------------------------------------------------------
 
 def main(argv=None):
-    """``python -m intrepyd.diagram simulate|verify FILE|- [options]``, or ``catalogue``"""
+    """``python -m intrepyd.diagram simulate|verify|mcdc FILE|- [options]``, or ``catalogue``"""
     parser = argparse.ArgumentParser(prog="python -m intrepyd.diagram",
                                      description="Simulate or verify an intrepyd circuit diagram.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -630,6 +846,14 @@ def main(argv=None):
     ver.add_argument("--depth", type=int, help="the deepest depth bmc and kind try")
     ver.add_argument("--certificates", action="store_true", default=None,
                      help="give each proved property its proof certificate, as SMT-LIB 2")
+    gen = sub.add_parser("mcdc", help="generate MC/DC tests for the diagram's decisions, "
+                                      "print JSON")
+    gen.add_argument("diagram", help="a *.intrepyd.json file, or - for standard input")
+    gen.add_argument("--decision", type=int, action="append",
+                     help="a decision's block id (repeat for several; default: the diagram's)")
+    gen.add_argument("--depth", type=int,
+                     help="the longest test, in steps after the first (default: 20)")
+    gen.add_argument("--timeout", type=float, help="seconds per condition (default: 30)")
     sub.add_parser("catalogue", help="print the library blocks a diagram may use, as JSON")
     args = parser.parse_args(argv)
     if args.command == "catalogue":
@@ -640,6 +864,8 @@ def main(argv=None):
         if args.command == "verify":
             result = verify(diagram, engine=args.engine, timeout=args.timeout, depth=args.depth,
                             certificates=args.certificates)
+        elif args.command == "mcdc":
+            result = mcdc(diagram, decisions=args.decision, depth=args.depth, timeout=args.timeout)
         else:
             result = simulate(diagram, steps=args.steps)
     except Exception as err:  # pylint: disable=broad-except  # reported, not raised, to the editor

@@ -335,5 +335,117 @@ def _type_of(ref, params, spec):
     return _type_of(other["type"], params, spec)
 
 
+
+def _fmics():
+    """out = (in1 or in2) and (in3 or in4) or (in5 and in6): six conditions."""
+    nodes = [_input(i, f"in{i}") for i in range(1, 7)]
+    nodes += [_gate(7, "or", "or1"), _gate(8, "or", "or2"), _gate(9, "and", "and1"),
+              _gate(10, "and", "and2"), _gate(11, "or", "or3"), {"id": 12, "kind": "output", "name": "out"}]
+    edges = [_wire(1, 7, "a"), _wire(2, 7, "b"), _wire(3, 8, "a"), _wire(4, 8, "b"),
+             _wire(5, 9, "a"), _wire(6, 9, "b"), _wire(7, 10, "a"), _wire(8, 10, "b"),
+             _wire(9, 11, "a"), _wire(10, 11, "b"), _wire(11, 12, "in")]
+    return _doc(nodes, edges)
+
+
+def _names(found):
+    return [c["name"] for c in found]
+
+
+class McdcTest(unittest.TestCase):
+
+    def assert_pairs(self, result):
+        """Each covered condition's pair: the condition and the decision differ."""
+        tests = result["tests"]
+        for k, cond in enumerate(result["conditions"]):
+            if cond["status"] != "covered":
+                continue
+            i, j = cond["pair"]
+            self.assertNotEqual(tests[i]["conditions"][k], tests[j]["conditions"][k], cond["name"])
+            self.assertEqual({tests[i]["decision"], tests[j]["decision"]}, {"T", "F"}, cond["name"])
+            # the values read are those of the replay, at its last step
+            for t in (tests[i], tests[j]):
+                key = f"{cond['block']}.{cond['output']}"
+                self.assertEqual(t["values"][key][-1], t["conditions"][k])
+                self.assertEqual(len(t["values"][key]), t["steps"])
+
+    def test_the_conditions_are_found_walking_back_through_the_boolean_operators(self):
+        doc = _fmics()
+        self.assertEqual(_names(diagram.conditions(doc, 12)), ["in5", "in6", "in1", "in2", "in3", "in4"])
+        self.assertEqual(_names(diagram.conditions(doc, 11)), ["in5", "in6", "in1", "in2", "in3", "in4"])
+        # stopped at a block: it is a condition
+        self.assertEqual(_names(diagram.conditions(doc, 12, stops=[10])), ["in5", "in6", "and2"])
+        # a comparison is a condition, a constant none, a net reached twice one
+        doc = _doc([_input(1, "x", "int8"), {"id": 2, "kind": "const", "name": None, "type": "int8",
+                                              "value": "3"}, _gate(3, "lt", "lt1"), _input(4, "a"),
+                    _gate(5, "and", "and1"), _gate(6, "or", "or1"),
+                    {"id": 7, "kind": "const", "name": None, "op": "true", "value": "true"},
+                    _gate(8, "and", "and2")],
+                   [_wire(1, 3, "a"), _wire(2, 3, "b"), _wire(3, 5, "a"), _wire(4, 5, "b"),
+                    _wire(4, 6, "a"), _wire(5, 6, "b"), _wire(6, 8, "a"), _wire(7, 8, "b")])
+        self.assertEqual(_names(diagram.conditions(doc, 8)), ["a", "lt1"])
+        with self.assertRaisesRegex(diagram.DiagramError, "no block 99"):
+            diagram.conditions(doc, 99)
+
+    def test_the_walk_goes_inside_sub_systems(self):
+        # out = s(a, b), s's inside: x < y? no: x and (y or z), z a latch inside
+        nodes = [_input(1, "a"), _input(2, "b"), _subsystem(3, "s"),
+                 _inside(_input(4, "x"), 3), _inside(_input(5, "y"), 3),
+                 _inside({"id": 6, "kind": "latch", "name": "z", "type": "bool"}, 3),
+                 _inside({"id": 7, "kind": "const", "name": None, "op": "false", "value": "false"}, 3),
+                 _inside(_gate(8, "or", "or1"), 3), _inside(_gate(9, "and", "and1"), 3),
+                 _inside({"id": 10, "kind": "output", "name": "o"}, 3),
+                 {"id": 11, "kind": "output", "name": "out"}]
+        edges = [_wire(1, 3, "x"), _wire(2, 3, "y"), _wire(7, 6, "init"), _wire(5, 6, "next"),
+                 _wire(5, 8, "a"), _wire(6, 8, "b"), _wire(4, 9, "a"), _wire(8, 9, "b"),
+                 _wire(9, 10, "in"), _wire(3, 11, "in")]
+        doc = _doc(nodes, edges)
+        self.assertEqual(_names(diagram.conditions(doc, 11)), ["a", "b", "s.z"])
+        # the latch: its pair needs a step to set it
+        result = diagram.mcdc(doc, decisions=[11], timeout=30)["results"][0]
+        self.assertEqual(result["covered"], 3)
+        self.assert_pairs(result)
+        z = result["tests"][result["conditions"][2]["pair"][0]]
+        self.assertGreaterEqual(max(t["steps"] for t in result["tests"]), 2)
+        self.assertIn(z["conditions"][2], ("T", "F"))
+
+    def test_each_condition_gets_its_pair_of_tests(self):
+        doc = _fmics()
+        doc["testgen"] = {"decisions": [{"block": 12}], "timeout": 30}
+        out = diagram.mcdc(doc)
+        self.assertEqual(out["criterion"], "masking")
+        [result] = out["results"]
+        self.assertEqual((result["decision"], result["name"]), (12, "out"))
+        self.assertEqual((result["covered"], result["total"]), (6, 6))
+        self.assert_pairs(result)
+        # a test is a run: its inputs, as stimuli, and every block's values
+        test = result["tests"][0]
+        self.assertEqual(sorted(test["stimuli"]), [str(i) for i in range(1, 7)])
+        self.assertIn("11.0", test["values"])
+
+    def test_a_masked_condition_has_no_pair(self):
+        # a or (a and b): b never decides alone
+        doc = _doc([_input(1, "a"), _input(2, "b"), _gate(3, "and", "and1"), _gate(4, "or", "or1")],
+                   [_wire(1, 3, "a"), _wire(2, 3, "b"), _wire(1, 4, "a"), _wire(3, 4, "b")])
+        [result] = diagram.mcdc(doc, decisions=[4], timeout=30)["results"]
+        self.assertEqual([(c["name"], c["status"]) for c in result["conditions"]],
+                         [("a", "covered"), ("b", "unreachable")])
+        self.assertNotIn("pair", result["conditions"][1])
+        self.assert_pairs(result)
+
+    def test_the_command_line_and_its_errors(self):
+        doc = _fmics()
+        run = subprocess.run([sys.executable, "-m", "intrepyd.diagram", "mcdc", "-", "--decision", "9",
+                              "--timeout", "30"], input=json.dumps(doc), capture_output=True,
+                             text=True, cwd=ROOT, check=False)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        [result] = json.loads(run.stdout)["results"]
+        self.assertEqual([c["name"] for c in result["conditions"]], ["in5", "in6"])
+        with self.assertRaisesRegex(diagram.DiagramError, "choose a decision"):
+            diagram.mcdc(doc)
+        counter = _counter_to(3)
+        with self.assertRaisesRegex(diagram.DiagramError, "not a boolean"):
+            diagram.mcdc(counter, decisions=[4])
+
+
 if __name__ == "__main__":
     unittest.main()
