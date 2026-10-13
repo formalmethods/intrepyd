@@ -9,6 +9,10 @@ one, and the section becomes the notes of the GitHub release.
 - Use the Formal Methods icon in the documentation header, favicon, logo
   and README.
 
+## 0.23.0
+
+- Bump intrepid version to 0.16.0
+
 ## 0.22.0
 
 - **MC/DC tests for circuit diagrams.** `intrepyd.diagram.conditions(doc,
