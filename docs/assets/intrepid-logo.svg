@@ -1,10 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1512" height="400" viewBox="0 0 1512 400" role="img" aria-labelledby="title desc">
   <title id="title">intrepid</title>
-  <desc id="desc">Logo intrepid per un progetto di verifica formale. Simbolo di deduzione con freccia ascendente blu e scritta blu scuro. Ricostruzione vettoriale con fondo trasparente.</desc>
+  <desc id="desc">The Formal Methods icon with the intrepid wordmark on a transparent background.</desc>
+  <svg x="0" y="0" width="400" height="400" viewBox="24 30 240 240">
   <g id="symbol">
-    <path fill="#001A3D" d="M48 64H100V188H296L340 236H100V344H48Z"/>
-    <path fill="#0055FF" d="M352 62V216L302 170H204Z"/>
+    <rect x="40" y="46" width="208" height="208" rx="44" fill="#102B46"/>
+    <path d="M83 96H102V145H160V164H102V207H83Z" fill="#FFFFFF"/>
+    <path d="M148 178L171 201L217 139" fill="none" stroke="#38D8BD" stroke-width="17" stroke-linecap="square" stroke-linejoin="miter"/>
   </g>
+  </svg>
   <g id="wordmark" fill="#001A3D" transform="translate(424 0)">
     <!-- All letters are outlines, with no external font dependency. -->
     <path id="i-1" d="M0 156H48V320H0Z M24 92A25 25 0 1 1 24 142A25 25 0 1 1 24 92Z"/>

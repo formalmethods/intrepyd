@@ -1,7 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="32 35 336 336" role="img" aria-label="intrepid">
-  <title>intrepid</title>
-  <!-- The intrepid symbol (the mark to the left of the wordmark in
-       intrepid-logo.svg), in white so it reads on the navy header. -->
-  <path fill="#ffffff" d="M48 64H100V188H296L340 236H100V344H48Z"/>
-  <path fill="#ffffff" d="M352 62V216L302 170H204Z"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="24 30 240 240" role="img" aria-labelledby="title"><title id="title">Formal Methods</title><g id="symbol">
+    <rect x="40" y="46" width="208" height="208" rx="44" fill="#102B46"/>
+    <path d="M83 96H102V145H160V164H102V207H83Z" fill="#FFFFFF"/>
+    <path d="M148 178L171 201L217 139" fill="none" stroke="#38D8BD" stroke-width="17" stroke-linecap="square" stroke-linejoin="miter"/>
+  </g></svg>
