@@ -53,9 +53,24 @@ marker so editors and type checkers see them: a net is an `intrepyd.api.Net`
 and a type an `intrepyd.api.Type`, not an opaque `Any`. `make typecheck_python`
 runs mypy over the annotated modules, configured under `[tool.mypy]` in
 `pyproject.toml`; it reads the sources statically, so it needs no intrepid
-library. The modules are being annotated incrementally — add a module to the
-`files` list once its public surface is typed, and hold `intrepyd.context` to
-the strict bar (`disallow_untyped_defs`).
+library. The checked surface includes `Context`, `Trace`, `Simulator`,
+`Circuit`, the engines and portfolio, translation/simulation helpers,
+pseudo-boolean helpers, and the EDA/PLC components. Every definition in those
+modules must be annotated (`disallow_untyped_defs`), except the portfolio's
+internal process/recipe helpers, whose bodies are checked with
+`check_untyped_defs`. The dynamic binding and exporter are also checked.
+
+`typing_tests/public_api.py` is a static consumer fixture, included in that
+command. It asserts return types (including optional certificates and trace
+dictionary keys), and checks that wrong argument types are rejected. Its
+intentional errors use `type: ignore` with `warn_unused_ignores`, so silently
+losing an annotation fails the check too. Do not execute this fixture.
+
+Annotations are still being extended to the rest of the package, including
+the remote client and other front-end/helper APIs. Add each module to mypy's
+`files` list once its public surface is typed, then extend the strict override.
+Third-party stubs such as `pandas-stubs` are optional; DataFrame internals are
+not checked without them.
 
 ## The C++ suite
 

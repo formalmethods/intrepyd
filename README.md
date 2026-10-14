@@ -222,6 +222,13 @@ always matches the code; the API reference is produced from the docstrings by
 [mkdocstrings](https://mkdocstrings.github.io/), so nothing generated is
 committed.
 
+The package ships inline type annotations (`py.typed`) for the local core API:
+contexts, traces, simulators, circuits, engines, portfolios, translation helpers
+and the EDA/PLC components. `intrepyd.api.Net` and `Type` distinguish nets from
+type handles. Coverage is being extended to the remaining modules; see the
+[type-checking guide](docs/developer/testing.md#linting-type-checking-and-coverage)
+for the checks and their scope.
+
 To work on the docs locally, `make serve_docs` previews the site at
 `http://127.0.0.1:8000`, rebuilding on every change, and `make build_docs`
 builds it into `site/`. Both need the `docs` dependency group

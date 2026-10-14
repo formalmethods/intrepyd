@@ -97,7 +97,7 @@ class Context:
         return super().__new__(cls)
 
     def __init__(self) -> None:
-        self.ctx = mk_ctx()
+        self.ctx: int = mk_ctx()
         self.inputs: dict[str, Net] = {}
         self.outputs: dict[str, Net] = {}
         self.latches: dict[str, Net] = {}

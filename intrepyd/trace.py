@@ -2,25 +2,30 @@
 This module implements the class for traces
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterator, Mapping
 from fractions import Fraction
+from typing import Literal, TypeVar, overload
 from pandas import DataFrame
-from intrepyd.api import mk_trace, trace_get_max_depth, trace_get_watched_net, \
+from intrepyd.api import Net, mk_trace, trace_get_max_depth, trace_get_watched_net, \
                          trace_prepare_value_for_net, trace_set_value, value_at, \
                          trace_get_watched_nets_number
+
+_Key = TypeVar("_Key")
 
 class Trace:
     """
     A trace generated from an Engine, or manually built for use in simulation
     """
-    def __init__(self, ctx, rawtrace=None):
+    def __init__(self, ctx: int, rawtrace: int | None = None) -> None:
         self.ctx = ctx
-        self.rawtrace = None
         if rawtrace is None:
             rawtrace = mk_trace(self.ctx)
         self.rawtrace = rawtrace
 
     @staticmethod
-    def get_numeric_value(value):
+    def get_numeric_value(value: str) -> int | float | Literal["?"]:
         """
         Converts a string value (including true, false) into a corresponding float or integer.
         Reals that are not finite decimals come as fractions, n/d, and floats can be inf,
@@ -38,13 +43,13 @@ class Trace:
             return float(value)
         return int(value)
 
-    def get_max_depth(self):
+    def get_max_depth(self) -> int:
         """
         Returns the max depth of the trace
         """
         return trace_get_max_depth(self.rawtrace)
 
-    def get_value(self, net, depth):
+    def get_value(self, net: Net, depth: int) -> str:
         """
         Retrieval of a value from the trace for a net at a depth
         """
@@ -54,7 +59,7 @@ class Trace:
             value += value_at(i)
         return value
 
-    def set_value(self, net, depth, value):
+    def set_value(self, net: Net, depth: int, value: str) -> None:
         """
         Sets a value for a net at a certain depth
         """
@@ -64,7 +69,14 @@ class Trace:
             value = 'F'
         trace_set_value(self.ctx, self.rawtrace, net, depth, value)
 
-    def get_as_net_dictionary(self, net2name=None):
+    @overload
+    def get_as_net_dictionary(self, net2name: None = None) -> dict[Net, list[str]]: ...
+
+    @overload
+    def get_as_net_dictionary(self, net2name: Mapping[Net, _Key]) -> dict[_Key, list[str]]: ...
+
+    def get_as_net_dictionary(self, net2name: Mapping[Net, _Key] | None = None
+                             ) -> dict[Net, list[str]] | dict[_Key, list[str]]:
         """
         Return the trace as a dictionary
 
@@ -76,7 +88,7 @@ class Trace:
             return {net : list(self._get_as_steps(net)) for net in watched_nets}
         return {net2name[net] : list(self._get_as_steps(net)) for net in watched_nets}
 
-    def get_as_depth_dictionary(self):
+    def get_as_depth_dictionary(self) -> dict[int, list[str]]:
         """
         Return the trace as a dictionary
 
@@ -85,7 +97,7 @@ class Trace:
         return {depth : list(self._get_values_at_depth(depth))\
                 for depth in range(trace_get_max_depth(self.rawtrace))}
 
-    def get_as_dataframe(self, net2name):
+    def get_as_dataframe(self, net2name: Mapping[Net, str]) -> DataFrame:
         """
         Return the trace as a pandas dataframe
 
@@ -101,7 +113,7 @@ class Trace:
             matrix.append(values)
         return DataFrame(matrix, index=indexes)
 
-    def set_from_dataframe(self, dataframe, inputname2net):
+    def set_from_dataframe(self, dataframe: DataFrame, inputname2net: Mapping[str, Net]) -> int:
         """
         Return a trace from a pandas dataframe. Only input values
         are considered in filling up the trace
@@ -120,11 +132,11 @@ class Trace:
             row += 1
         return max_depth
 
-    def _get_as_steps(self, net):
+    def _get_as_steps(self, net: Net) -> Iterator[str]:
         max_depth = trace_get_max_depth(self.rawtrace)
         return (self.get_value(net, depth) for depth in range(0, max_depth + 1))
 
-    def _get_values_at_depth(self, depth):
+    def _get_values_at_depth(self, depth: int) -> Iterator[str]:
         watched_nets = [trace_get_watched_net(self.rawtrace, i)\
                        for i in range(trace_get_watched_nets_number(self.rawtrace))]
         return (self.get_value(net, depth) for net in watched_nets)

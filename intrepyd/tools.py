@@ -3,14 +3,24 @@
 Provides some tools that could be used almost out of the box
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterable, Mapping, Sequence
 import os
 import importlib
+from types import ModuleType
+from typing import TYPE_CHECKING
 from pandas import read_csv
+from intrepyd.api import Net
 import intrepyd.lustre2py.translator as ltr
 import intrepyd.iec611312py.translator as itr
 import intrepyd.simulink as sml
 
-def translate_lustre(infilename, topnode, realtype, outmodule='encoding', inttype='int32'):
+if TYPE_CHECKING:
+    from intrepyd.context import Context
+
+def translate_lustre(infilename: str, topnode: str, realtype: str,
+                     outmodule: str = 'encoding', inttype: str = 'int32') -> ModuleType:
     """
     Translates a lustre file into intrepyd syntax
 
@@ -24,8 +34,10 @@ def translate_lustre(infilename, topnode, realtype, outmodule='encoding', inttyp
     return enc
 
 
-def translate_simulink(infilename, outmodule='encoding', realtype='float', variables=None,
-                       scripts=None, mats=None, callbacks=True):
+def translate_simulink(infilename: str, outmodule: str = 'encoding', realtype: str = 'float',
+                       variables: Mapping[str, str] | None = None,
+                       scripts: Sequence[str] | None = None, mats: Sequence[str] | None = None,
+                       callbacks: bool = True) -> ModuleType:
     """
     Translates a Simulink model, a .mdl or a .slx file, into intrepyd syntax
 
@@ -51,7 +63,7 @@ def translate_simulink(infilename, outmodule='encoding', realtype='float', varia
     return enc
 
 
-def translate_iec61131(infilename, outmodule='encoding'):
+def translate_iec61131(infilename: str, outmodule: str = 'encoding') -> ModuleType:
     """
     Translates a ST iec61131 file into intrepyd syntax
     """
@@ -61,7 +73,7 @@ def translate_iec61131(infilename, outmodule='encoding'):
     return enc
 
 
-def simulate(ctx, infile, depth, outputs):
+def simulate(ctx: Context, infile: str, depth: int, outputs: Iterable[Net]) -> None:
     """
     Simulates the design using default values for inputs or by taking
     input values from an existing simulation file

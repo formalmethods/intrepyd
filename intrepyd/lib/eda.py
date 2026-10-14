@@ -2,7 +2,16 @@
 Implementation of EDA-specific components
 """
 
-def mk_clock(ctx, name):
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+from intrepyd.api import Net, Type
+
+if TYPE_CHECKING:
+    from intrepyd.context import Context
+
+
+def mk_clock(ctx: Context, name: str) -> tuple[Net, Net]:
     """
     Creates a clock signal
     """
@@ -15,7 +24,9 @@ def mk_clock(ctx, name):
     ctx.set_latch_init_next(inv, ctx.mk_true(), ctx.mk_not(clk))
     return clk, i
 
-def mk_counter(context, name, typ, limit, init=None, increment=None, enable=None, reset=None):
+def mk_counter(context: Context, name: str, typ: Type, limit: Net,
+               init: Net | None = None, increment: Net | None = None,
+               enable: Net | None = None, reset: Net | None = None) -> tuple[Net, Net]:
     """
     Counts from init to limit by increment. Returns the
     value of the counter and whether the limit has been
@@ -84,7 +95,7 @@ class LatchD:
              |
       E -----+
     """
-    def __init__(self, ctx, name, t):
+    def __init__(self, ctx: Context, name: str, t: Type) -> None:
         """
         Args:
             ctx: the context to use
@@ -95,7 +106,7 @@ class LatchD:
         self._name = name
         self.q = ctx.mk_latch(name, t)
 
-    def set_init_next(self, init, d, e):
+    def set_init_next(self, init: Net, d: Net, e: Net) -> None:
         """
         Sets the initial value of the latch
 
@@ -130,7 +141,7 @@ class Delay:
          |    |   |    |
          |____|   |____|
     """
-    def __init__(self, ctx, name, t):
+    def __init__(self, ctx: Context, name: str, t: Type) -> None:
         """
         Args:
             ctx: the context to use
@@ -142,7 +153,7 @@ class Delay:
         self._l = ctx.mk_latch(name + '_back', t)
         self.q = ctx.mk_latch(name, t)
 
-    def set_init_next(self, init, d):
+    def set_init_next(self, init: Net, d: Net) -> None:
         """
         Sets the initial value of the latch
 
@@ -192,7 +203,7 @@ class FlipFlopD:
        |                                 |
        +---------------------------------+
     """
-    def __init__(self, ctx, name, t, c):
+    def __init__(self, ctx: Context, name: str, t: Type, c: Net) -> None:
         """
         Args:
             ctx: the context to use
@@ -207,7 +218,7 @@ class FlipFlopD:
         self.q = self._ctx.mk_ite(c, self._master.q, self._slave, name + '.Q')
         self._c = c
 
-    def set_init_next(self, init, d):
+    def set_init_next(self, init: Net, d: Net) -> None:
         """
         Sets the initial and next value
 
@@ -247,7 +258,7 @@ class FlipFlopDE:
      C ---------+
 
     """
-    def __init__(self, ctx, name, t, c):
+    def __init__(self, ctx: Context, name: str, t: Type, c: Net) -> None:
         """
         Args:
             ctx: the context to use
@@ -262,7 +273,7 @@ class FlipFlopDE:
         self.q = self._ctx.mk_ite(c, self._master.q, self._slave, name + '.Q')
         self._c = c
 
-    def set_init_next(self, init, d, e):
+    def set_init_next(self, init: Net, d: Net, e: Net) -> None:
         """
         Sets the initial and next value
 
@@ -276,7 +287,7 @@ class FlipFlopDE:
         self._ctx.set_latch_init_next(self._slave, init, self.q)
 
 
-def mk_mux(ctx, sel, in0, in1, name=None):
+def mk_mux(ctx: Context, sel: Net, in0: Net, in1: Net, name: str | None = None) -> Net:
     """
     A 2:1 multiplexer: returns ``in1`` when ``sel`` is true, else ``in0``.
 
@@ -320,7 +331,7 @@ class ShiftRegister:
     D ---| L0 |---| L1 |-- ... --|Ln-1|--- Q
          |____|   |____|         |____|
     """
-    def __init__(self, ctx, name, t, length):
+    def __init__(self, ctx: Context, name: str, t: Type, length: int) -> None:
         """
         Args:
             ctx: the context to use
@@ -335,7 +346,7 @@ class ShiftRegister:
         self.stages = [ctx.mk_latch(name + '_' + str(i), t) for i in range(length)]
         self.q = self.stages[-1]
 
-    def set_init_next(self, init, d):
+    def set_init_next(self, init: Net, d: Net) -> None:
         """
         Closes the register chain.
 

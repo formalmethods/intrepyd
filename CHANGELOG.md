@@ -6,6 +6,11 @@ one, and the section becomes the notes of the GitHub release.
 
 ## Unreleased
 
+- Extend public type annotations to traces, simulators, circuits, engines,
+  portfolios, translation/simulation helpers, pseudo-boolean helpers and
+  EDA/PLC components. Preserve trace dictionary key types and distinguish
+  nets from type handles throughout these APIs. Extend mypy checks and add
+  static consumer regression examples; runtime behaviour is unchanged.
 - Use the Formal Methods icon in the documentation header, favicon, logo
   and README.
 

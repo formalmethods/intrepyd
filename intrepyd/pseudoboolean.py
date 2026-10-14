@@ -2,7 +2,17 @@
 Routines for pseudo-boolean functions
 """
 
-def mk_at_most_one(ctx, nets):
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
+from intrepyd.api import Net
+
+if TYPE_CHECKING:
+    from intrepyd.context import Context
+
+
+def mk_at_most_one(ctx: Context, nets: Sequence[Net]) -> Net:
     """
     Computes "at most one net is true"
 
@@ -18,7 +28,7 @@ def mk_at_most_one(ctx, nets):
             at_most_one = ctx.mk_and(at_most_one, conj)
     return at_most_one
 
-def mk_at_least_one(ctx, nets):
+def mk_at_least_one(ctx: Context, nets: Sequence[Net]) -> Net:
     """
     Computes "at least one net is true"
 
@@ -32,7 +42,7 @@ def mk_at_least_one(ctx, nets):
         at_least_one = ctx.mk_or(at_least_one, nets[i])
     return at_least_one
 
-def mk_exactly_one(ctx, nets, name):
+def mk_exactly_one(ctx: Context, nets: Sequence[Net], name: str) -> Net:
     """
     Computes the pseudo-boolean constraint "exactly one is true".
     Uses the "commander variable" encoding described in
@@ -51,9 +61,10 @@ def mk_exactly_one(ctx, nets, name):
     ctx.pop_namespace()
     return result
 
-def _mk_exactly_one_cv(ctx, nets, k=3, depth=0, n_group=0):
+def _mk_exactly_one_cv(ctx: Context, nets: Sequence[Net], k: int = 3,
+                       depth: int = 0, n_group: int = 0) -> Net:
     num_nets = len(nets)
-    nets_to_process = []
+    nets_to_process: Sequence[Net] = []
     if num_nets > k:
         # Recursively compute commander variables
         i = 0

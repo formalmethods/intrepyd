@@ -79,17 +79,34 @@ python_version = "3.11"
 # the rest of the package is type-checked as it gets annotated. Imports into
 # unlisted modules are followed for types but their own errors are silenced,
 # and third-party packages without stubs (pandas, antlr) are not required.
-files = ["intrepyd/api.py", "intrepyd/context.py", "intrepyd/export.py"]
+files = [
+    "intrepyd/api.py", "intrepyd/context.py", "intrepyd/export.py",
+    "intrepyd/trace.py", "intrepyd/simulator.py", "intrepyd/engine.py",
+    "intrepyd/circuit.py", "intrepyd/portfolio.py", "intrepyd/tools.py",
+    "intrepyd/pseudoboolean.py", "intrepyd/lib/eda.py", "intrepyd/lib/plc.py",
+    "typing_tests/public_api.py",
+]
 follow_imports = "silent"
 ignore_missing_imports = true
 warn_redundant_casts = true
 
-# context.py is held to the strict bar: every def must be annotated. api.py is
-# the dynamic ctypes binding and export.py has a few deliberately untyped
-# helpers, so they are checked but not required to annotate every def.
+# Every definition in these modules is annotated. Dynamic binding/export and
+# the portfolio's process/recipe helpers are checked without that restriction.
 [[tool.mypy.overrides]]
-module = "intrepyd.context"
+module = [
+    "intrepyd.context", "intrepyd.trace", "intrepyd.simulator", "intrepyd.engine",
+    "intrepyd.circuit", "intrepyd.tools", "intrepyd.pseudoboolean",
+    "intrepyd.lib.eda", "intrepyd.lib.plc",
+]
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "intrepyd.portfolio"
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "public_api"
+warn_unused_ignores = true
 
 [tool.setuptools.dynamic]
 version = {file = "VERSION"}

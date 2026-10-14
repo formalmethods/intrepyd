@@ -9,8 +9,16 @@ bistables and the counter hold their output in a latch, so it updates on the
 next cycle — the usual way these blocks enter a cycle-based model checker.
 """
 
+from __future__ import annotations
 
-def mk_r_trig(ctx, clk, name):
+from typing import TYPE_CHECKING
+from intrepyd.api import Net, Type
+
+if TYPE_CHECKING:
+    from intrepyd.context import Context
+
+
+def mk_r_trig(ctx: Context, clk: Net, name: str) -> Net:
     """
     Rising-edge detector (R_TRIG). ``Q`` is true for the one cycle in which
     ``clk`` goes from false to true. Following IEC 61131-3, the internal memory
@@ -32,7 +40,7 @@ def mk_r_trig(ctx, clk, name):
     return ctx.mk_and(clk, ctx.mk_not(mem), name=name)
 
 
-def mk_f_trig(ctx, clk, name):
+def mk_f_trig(ctx: Context, clk: Net, name: str) -> Net:
     """
     Falling-edge detector (F_TRIG). ``Q`` is true for the one cycle in which
     ``clk`` goes from true to false. Following IEC 61131-3, the internal memory
@@ -54,7 +62,7 @@ def mk_f_trig(ctx, clk, name):
     return ctx.mk_and(ctx.mk_not(clk), mem, name=name)
 
 
-def mk_sr(ctx, s, r, name):
+def mk_sr(ctx: Context, s: Net, r: Net, name: str) -> Net:
     """
     Set-dominant bistable (SR). The output is held in a latch, starting false;
     when both ``s`` and ``r`` are true, the set wins.
@@ -77,7 +85,7 @@ def mk_sr(ctx, s, r, name):
     return q
 
 
-def mk_rs(ctx, s, r, name):
+def mk_rs(ctx: Context, s: Net, r: Net, name: str) -> Net:
     """
     Reset-dominant bistable (RS). The output is held in a latch, starting
     false; when both ``s`` and ``r`` are true, the reset wins.
@@ -100,7 +108,7 @@ def mk_rs(ctx, s, r, name):
     return q
 
 
-def mk_ctu(ctx, name, cu, reset, pv, typ):
+def mk_ctu(ctx: Context, name: str, cu: Net, reset: Net, pv: Net, typ: Type) -> tuple[Net, Net]:
     """
     Up counter (CTU). On each rising edge of ``cu`` the count ``CV`` goes up by
     one, saturating at the preset ``pv``; ``reset`` forces ``CV`` back to zero.
@@ -130,7 +138,7 @@ def mk_ctu(ctx, name, cu, reset, pv, typ):
     return cv, q
 
 
-def mk_ton(ctx, name, in_, pt, typ):
+def mk_ton(ctx: Context, name: str, in_: Net, pt: Net, typ: Type) -> tuple[Net, Net]:
     """
     On-delay timer (TON). ``Q`` becomes true once ``in_`` has been true for
     ``pt`` consecutive cycles, and stays true while ``in_`` stays true;
@@ -158,7 +166,7 @@ def mk_ton(ctx, name, in_, pt, typ):
     return et, q
 
 
-def mk_tof(ctx, name, in_, pt, typ):
+def mk_tof(ctx: Context, name: str, in_: Net, pt: Net, typ: Type) -> tuple[Net, Net]:
     """
     Off-delay timer (TOF). ``Q`` follows ``in_`` up, and when ``in_`` goes
     false ``Q`` stays true for ``pt`` more cycles before dropping. ``Q`` starts
@@ -187,7 +195,7 @@ def mk_tof(ctx, name, in_, pt, typ):
     return et, q
 
 
-def mk_tp(ctx, name, in_, pt, typ):
+def mk_tp(ctx: Context, name: str, in_: Net, pt: Net, typ: Type) -> tuple[Net, Net]:
     """
     Pulse timer (TP). A rising edge of ``in_`` makes ``Q`` true for exactly
     ``pt`` cycles; the pulse is not retriggerable (edges during the pulse are
@@ -218,7 +226,7 @@ def mk_tp(ctx, name, in_, pt, typ):
     return et, q
 
 
-def mk_ctd(ctx, name, cd, load, pv, typ):
+def mk_ctd(ctx: Context, name: str, cd: Net, load: Net, pv: Net, typ: Type) -> tuple[Net, Net]:
     """
     Down counter (CTD). ``load`` sets the count ``CV`` to the preset ``pv``;
     each rising edge of ``cd`` lowers ``CV`` by one, down to zero. ``Q`` is true
@@ -248,7 +256,8 @@ def mk_ctd(ctx, name, cd, load, pv, typ):
     return cv, q
 
 
-def mk_ctud(ctx, name, cu, cd, reset, load, pv, typ):
+def mk_ctud(ctx: Context, name: str, cu: Net, cd: Net, reset: Net, load: Net,
+            pv: Net, typ: Type) -> tuple[Net, Net, Net]:
     """
     Up-down counter (CTUD). A rising edge of ``cu`` raises the count ``CV``, a
     rising edge of ``cd`` lowers it (down to zero); ``reset`` forces it to zero

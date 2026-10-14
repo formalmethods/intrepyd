@@ -31,14 +31,23 @@ Example:
     print(result, portfolio.get_last_engine(), portfolio.get_last_time())
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterable
 import multiprocessing
 import sys
 import threading
 import time
 import os
 from multiprocessing import connection
+from typing import TYPE_CHECKING, cast
+from intrepyd.api import Net
 from intrepyd.engine import Bmc, Engine, EngineResult
 from intrepyd.recipe import replay
+
+if TYPE_CHECKING:
+    from intrepyd.context import Context
+    from intrepyd.trace import Trace
 
 # The engines a portfolio can run:
 #   bmc     bounded model checking, at depth 0, 1, 2, ...: counterexamples
@@ -57,7 +66,8 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
     has none, and implements the public methods instead.
     """
 
-    def __init__(self, context, engines=ENGINES, max_depth=None, certificates=False):
+    def __init__(self, context: Context, engines: Iterable[str] = ENGINES,
+                 max_depth: int | None = None, certificates: bool = False) -> None:
         """
         Args:
             context (Context): the context of the circuit
@@ -77,24 +87,24 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
         self.engines = engines
         self.max_depth = max_depth
         self.certificates = certificates
-        self.targets = []
-        self.watches = []
-        self._last_engine = None
-        self._last_time = None
-        self._last_errors = {}
-        self._last_reached = ()
-        self._last_depth = None
-        self._last_trace = None
-        self._last_certificate = None
+        self.targets: list[Net] = []
+        self.watches: list[Net] = []
+        self._last_engine: str | None = None
+        self._last_time: float | None = None
+        self._last_errors: dict[str, str] = {}
+        self._last_reached: tuple[Net, ...] = ()
+        self._last_depth: int | None = None
+        self._last_trace: Trace | None = None
+        self._last_certificate: str | None = None
 
-    def add_target(self, net):
+    def add_target(self, net: Net) -> None:
         self.context.recipe.ref(net)    # raises if it cannot be rebuilt
         self.targets.append(net)
 
-    def add_watch(self, net):
+    def add_watch(self, net: Net) -> None:
         self.watches.append(net)
 
-    def reach_targets(self, timeout=None):
+    def reach_targets(self, timeout: float | None = None) -> EngineResult:
         """
         Runs the engines until one of them answers REACHABLE or UNREACHABLE,
         and returns that answer; returns UNKNOWN if none of them does, or
@@ -127,37 +137,37 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
             self._last_depth = depth
         return self.last_result
 
-    def get_last_engine(self):
+    def get_last_engine(self) -> str | None:
         """
         Returns the name of the engine that gave the last answer, or None if
         the last answer was UNKNOWN
         """
         return self._last_engine
 
-    def get_last_time(self):
+    def get_last_time(self) -> float | None:
         """
         Returns how long the last reach_targets() took, in seconds
         """
         return self._last_time
 
-    def get_last_errors(self):
+    def get_last_errors(self) -> dict[str, str]:
         """
         Returns the errors of the engines that failed in the last
         reach_targets(), as a dictionary engine -> message
         """
         return dict(self._last_errors)
 
-    def get_last_reached_targets(self):
+    def get_last_reached_targets(self) -> tuple[Net, ...]:
         if self.last_result != EngineResult.REACHABLE:
             return ()
         return self._last_reached
 
-    def get_last_certificate(self):
+    def get_last_certificate(self) -> str | None:
         if self.last_result != EngineResult.UNREACHABLE:
             return None
         return self._last_certificate
 
-    def get_last_trace(self):
+    def get_last_trace(self) -> Trace:
         if self.last_result != EngineResult.REACHABLE:
             raise Exception('Cannot get a trace as last result was not REACHABLE')
         if self._last_trace is None:
@@ -166,24 +176,25 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
                 bmc.add_target(target)
             for net in self.watches:
                 bmc.add_watch(net)
-            bmc.set_current_depth(self._last_depth)
+            depth = cast(int, self._last_depth)  # a REACHABLE answer carries a depth
+            bmc.set_current_depth(depth)
             if bmc.reach_targets() != EngineResult.REACHABLE:
                 raise RuntimeError('Cannot rebuild the counterexample that %s found at depth %d'
-                                   % (self._last_engine, self._last_depth))
+                                   % (self._last_engine, depth))
             self._last_trace = bmc.get_last_trace()
         return self._last_trace
 
-    def remove_last_reached_targets(self):
+    def remove_last_reached_targets(self) -> None:
         for target in self.get_last_reached_targets():
             self.targets.remove(target)
 
-    def can_reach(self):
+    def can_reach(self) -> bool:
         return True
 
-    def can_prove(self):
+    def can_prove(self) -> bool:
         return any(name != 'bmc' for name in self.engines)
 
-    def can_optimize(self):
+    def can_optimize(self) -> bool:
         return False
 
 
@@ -221,7 +232,10 @@ def _run(engines, circuit, targets, how, timeout, errors):  # pylint: disable=to
             remaining = None if deadline is None else deadline - time.monotonic()
             if remaining is not None and remaining <= 0:
                 return None
-            for receiver in connection.wait(list(running), remaining):
+            for ready in connection.wait(list(running), remaining):
+                # wait() also accepts sockets and integer handles; this call
+                # only passes the receiving ends of our pipes.
+                receiver = cast(connection.Connection, ready)
                 engine, process = running.pop(receiver)
                 try:
                     message = receiver.recv()
