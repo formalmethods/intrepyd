@@ -21,3 +21,4 @@ intrepyd/LICENSE.intrepid
 
 # The encodings of benchmarks/harness.py
 benchmarks/cache
+trace.cpp

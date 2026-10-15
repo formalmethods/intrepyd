@@ -11,6 +11,11 @@ one, and the section becomes the notes of the GitHub release.
   and text, and the formula the editor builds the circuit from). The module
   documentation of `intrepyd.diagram` describes it; it changes nothing in how
   a diagram is built, simulated, verified or given its MC/DC tests.
+- An MC/DC decision may have a `start`, the first step at which it counts:
+  `python -m intrepyd.diagram mcdc` then gives it tests of at least start + 1
+  steps, and says its `start` in the decision's result. It is for circuits
+  that are late by some steps, such as those the editor builds from formulas
+  that look ahead (`next`).
 
 ## 0.24.0
 

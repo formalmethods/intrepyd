@@ -447,6 +447,27 @@ class McdcTest(unittest.TestCase):
         self.assertEqual(statuses(result), statuses(expected))
         self.assertEqual((result["covered"], result["total"]), (6, 6))
 
+    def test_a_decision_with_a_start_counts_from_that_step(self):
+        # a and b, which a test of one step covers: from step 3, every test has 4 steps or more
+        doc = _doc([_input(1, "a"), _input(2, "b"), _gate(3, "and", "and1")],
+                   [_wire(1, 3, "a"), _wire(2, 3, "b")])
+        [plain] = diagram.mcdc(doc, decisions=[3], timeout=30)["results"]
+        self.assertEqual(min(t["steps"] for t in plain["tests"]), 1)
+        self.assertNotIn("start", plain)
+        [late] = diagram.mcdc(doc, decisions=[{"block": 3, "start": 3}], timeout=30)["results"]
+        self.assertEqual((late["covered"], late["total"]), (2, 2))
+        self.assertEqual(late["start"], 3)
+        self.assertGreaterEqual(min(t["steps"] for t in late["tests"]), 4)
+        self.assert_pairs(late)
+        # from the testgen section too
+        doc["testgen"] = {"decisions": [{"block": 3, "start": 2}], "timeout": 30}
+        [section] = diagram.mcdc(doc)["results"]
+        self.assertGreaterEqual(min(t["steps"] for t in section["tests"]), 3)
+        with self.assertRaisesRegex(diagram.DiagramError, "after the longest test"):
+            diagram.mcdc(doc, decisions=[{"block": 3, "start": 30}], depth=5)
+        with self.assertRaisesRegex(diagram.DiagramError, "a step, 0 or more"):
+            diagram.mcdc(doc, decisions=[{"block": 3, "start": -1}])
+
     def test_the_command_line_and_its_errors(self):
         doc = _fmics()
         run = subprocess.run([sys.executable, "-m", "intrepyd.diagram", "mcdc", "-", "--decision", "9",

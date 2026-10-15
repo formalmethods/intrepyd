@@ -29,7 +29,7 @@ Diagram format (version 3)
         "certificates": false   # proof certificates for what is proved (optional)
       },
       "testgen": {          # optional: the MC/DC tests to generate
-        "decisions": [{"block": 7, "stops": [5]}, ...],
+        "decisions": [{"block": 7, "stops": [5], "start": 2}, ...],
         "timeout": 30,          # seconds, per condition
         "depth": 20             # the longest test, in steps after the first
       },
@@ -117,7 +117,10 @@ listed in the decision's ``"stops"``. Constants are not conditions, and a net
 reached twice is one condition. For each condition, the tests are a pair that
 shows it alone decides the outcome (masking MC/DC): the condition and the
 decision differ between the two tests, and in each the decision would change
-if the condition did. It prints::
+if the condition did. A decision's ``"start"`` (0 by default) is the first
+step at which it counts: every test then has at least start + 1 steps (a
+circuit that is late by some steps, as one computing a formula that looks
+ahead, says nothing at its first ones). It prints::
 
     {"criterion": "masking", "results": [{
         "decision": id, "name": "and1",
@@ -126,7 +129,9 @@ if the condition did. It prints::
                         "pair": [0, 1], "engine": "bmc", "time": 0.1}, ...],
         "tests": [{"steps": N, "stimuli": {...}, "values": {...},
                    "conditions": ["T", "F", ...], "decision": "T"}, ...],
-        "covered": 2, "total": 2}, ...]}
+        "covered": 2, "total": 2, "start": 2}, ...]}
+
+(``start`` only when the decision has one.)
 
 Each test is a run of the circuit (its inputs at each step, as stimuli, and
 every block's values along it, as a simulation gives them); its conditions
@@ -426,7 +431,7 @@ def mcdc(diagram, decisions=None, depth=None, timeout=None):
     timeout = float(timeout if timeout is not None else section.get("timeout", 30))
     return {"criterion": CRITERION,
             "results": [_mcdc_decision(diagram, int(e["block"]), e.get("stops", ()),
-                                       (depth, timeout)) for e in entries]}
+                                       (depth, timeout, int(e.get("start", 0)))) for e in entries]}
 
 
 def _mcdc_decision(diagram, decision, stops, how):  # pylint: disable=too-many-locals
@@ -434,7 +439,12 @@ def _mcdc_decision(diagram, decision, stops, how):  # pylint: disable=too-many-l
     of the circuit, A and B, side by side."""
     from intrepyd.context import Context  # pylint: disable=import-outside-toplevel
     from intrepyd.engine import EngineResult  # pylint: disable=import-outside-toplevel
-    depth, timeout = how
+    depth, timeout, start = how
+    if start < 0:
+        raise DiagramError(f"the start of decision {decision} is a step, 0 or more")
+    if start > depth:
+        raise DiagramError(f"decision {decision} starts at step {start}, after the longest test "
+                           f"({depth} steps after the first): make the tests longer")
     nodes, into, _ = _netlist(diagram)
     key = _decision_source(nodes, into, decision)
     found = _walk(nodes, into, key, set(stops))
@@ -448,9 +458,12 @@ def _mcdc_decision(diagram, decision, stops, how):  # pylint: disable=too-many-l
         raise DiagramError(f"{_label(nodes[decision])} is not a boolean: it cannot be a decision")
     tests, index = [], {}
     rows = []
+    counts = _from_step(ctx, start)
     for cond in found:
         objective = _objective(ctx, a.outputs[key], b.outputs[key],
                                a.outputs[cond], b.outputs[cond])
+        if counts is not None:
+            objective = ctx.mk_and(objective, counts)
         portfolio = ctx.mk_portfolio(max_depth=depth)
         portfolio.add_target(objective)
         for net in [*a.inputs.values(), *b.inputs.values(), objective]:
@@ -465,9 +478,26 @@ def _mcdc_decision(diagram, decision, stops, how):  # pylint: disable=too-many-l
         else:
             row["status"] = "unreachable" if answer == EngineResult.UNREACHABLE else "unknown"
         rows.append(row)
-    return {"decision": decision, "name": _net_name(nodes[decision]), "conditions": rows,
-            "tests": tests, "covered": sum(r["status"] == "covered" for r in rows),
-            "total": len(rows)}
+    result = {"decision": decision, "name": _net_name(nodes[decision]), "conditions": rows,
+              "tests": tests, "covered": sum(r["status"] == "covered" for r in rows),
+              "total": len(rows)}
+    if start > 0:
+        result["start"] = start
+    return result
+
+
+def _from_step(ctx, start):
+    """A net true from step ``start`` on (a chain of latches, each false at
+    the first step and then what the one before it was), or None for 0."""
+    if start <= 0:
+        return None
+    boolean = ctx.mk_boolean_type()
+    net = ctx.mk_true()
+    for k in range(1, start + 1):
+        latch = ctx.mk_latch(f"__mcdc_from{k}", boolean)
+        ctx.set_latch_init_next(latch, ctx.mk_false(), net)
+        net = latch
+    return net
 
 
 def _copy(diagram, ctx, name):
