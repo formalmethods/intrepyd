@@ -32,8 +32,21 @@ Diagram format (version 3)
         "decisions": [{"block": 7, "stops": [5]}, ...],
         "timeout": 30,          # seconds, per condition
         "depth": 20             # the longest test, in steps after the first
+      },
+      "requirement": {      # optional: the requirement the circuit implements
+        "id": "LLR-012",
+        "title": "Alarm on occlusion",
+        "text": "The pump shall raise the occlusion alarm when ...",
+        "signals": {"pressure": "int16"},
+        "formula": "(pressure > 300 and infusing) or door_open",
+        "built": {...}          # what the editor last built the circuit from
       }
     }
+
+The ``requirement`` section is the editor's: the circuit a requirement's
+formula is built into is an ordinary circuit, in ``circuit``, and this module
+builds, simulates and verifies it, and generates its MC/DC tests, as any
+other. The section itself is not read here.
 
 On top of the export's schema, a diagram has:
 

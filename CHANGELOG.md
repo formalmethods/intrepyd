@@ -4,6 +4,14 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.25.0
+
+- Diagrams may carry a `requirement` section: the requirement the circuit
+  implements, as the intrepid-vscode editor writes it (its identifier, title
+  and text, and the formula the editor builds the circuit from). The module
+  documentation of `intrepyd.diagram` describes it; it changes nothing in how
+  a diagram is built, simulated, verified or given its MC/DC tests.
+
 ## 0.24.0
 
 - Extend public type annotations to traces, simulators, circuits, engines,

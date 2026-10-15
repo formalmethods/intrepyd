@@ -432,6 +432,21 @@ class McdcTest(unittest.TestCase):
         self.assertNotIn("pair", result["conditions"][1])
         self.assert_pairs(result)
 
+    def test_a_requirement_section_changes_nothing(self):
+        # the editor's requirement, with the circuit built from its formula
+        doc = _fmics()
+        doc["testgen"] = {"decisions": [{"block": 12}], "timeout": 30}
+        doc["requirement"] = {"id": "LLR-1", "title": "t", "text": "x", "formula": "in1 or in2",
+                              "signals": {"in1": "bool"}, "built": {"circuit": "0", "formula": "0"}}
+        plain = _fmics()
+        plain["testgen"] = doc["testgen"]
+        [result] = diagram.mcdc(doc)["results"]
+        [expected] = diagram.mcdc(plain)["results"]
+        def statuses(r):
+            return [(c["name"], c["status"]) for c in r["conditions"]]
+        self.assertEqual(statuses(result), statuses(expected))
+        self.assertEqual((result["covered"], result["total"]), (6, 6))
+
     def test_the_command_line_and_its_errors(self):
         doc = _fmics()
         run = subprocess.run([sys.executable, "-m", "intrepyd.diagram", "mcdc", "-", "--decision", "9",
