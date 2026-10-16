@@ -1,5 +1,9 @@
 # Helpers
 
+## The engines' license
+
+::: intrepyd.license
+
 ## SCR requirements
 
 ::: intrepyd.scr.mk_scr

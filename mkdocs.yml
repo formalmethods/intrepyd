@@ -56,6 +56,7 @@ nav:
   - Tutorial: tutorial/index.md
   - Guide:
       - Installation: guide/installation.md
+      - The engines' license: guide/license.md
       - Building models: guide/building-models.md
       - Simulating: guide/simulating.md
       - Model checking: guide/model-checking.md

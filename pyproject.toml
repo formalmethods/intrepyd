@@ -119,4 +119,4 @@ exclude = ["intrepyd.tests", "intrepyd.tests.*"]
 # fetch_intrepid.py puts the library of one platform there, and only that one
 # ends up in the wheel; py.typed (PEP 561) tells type checkers the package
 # ships inline annotations
-intrepyd = ["libintrepid.so", "intrepid.dll", "LICENSE.intrepid", "py.typed"]
+intrepyd = ["libintrepid.so", "intrepid.dll", "LICENSE.intrepid", "license.json", "py.typed"]

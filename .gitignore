@@ -18,6 +18,8 @@ intrepyd/formula2py/Formula.interp
 intrepyd/libintrepid.so
 intrepyd/intrepid.dll
 intrepyd/LICENSE.intrepid
+# the noncommercial license a wheel carries (make wheel WHEEL_LICENSE=...)
+intrepyd/license.json
 
 # The encodings of benchmarks/harness.py
 benchmarks/cache

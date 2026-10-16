@@ -30,6 +30,11 @@ VERSION:=$(shell cat VERSION)
 # Where 'make release' pushes the tag v$(VERSION), and the branch it must be on
 REMOTE?=origin
 BRANCH?=main
+# The noncommercial license the wheels carry next to the library (intrepid
+# 1.7 and later need a license to run their engines): a file issued for a
+# year from the release. Without it, a wheel carries none, and its users need
+# their own.
+WHEEL_LICENSE?=
 FETCH_ARGS=$(if $(INTREPID_DIR),--from $(INTREPID_DIR),) \
            $(if $(PLATFORM),--platform $(PLATFORM),)
 
@@ -99,11 +104,14 @@ serve_docs:
 # trying them out.
 wheel: fetch_intrepid
 	@echo "# Building the wheel for $$(cat .intrepid/PLATFORM)"
-	@rm -fr build intrepyd.egg-info
+	@rm -fr build intrepyd.egg-info intrepyd/license.json
+	@$(if $(WHEEL_LICENSE),cp $(WHEEL_LICENSE) intrepyd/license.json,echo "# No WHEEL_LICENSE: the wheel carries no license")
 	@$(PYTHON) -m build --wheel --outdir dist
-	@rm -fr build intrepyd.egg-info
+	@rm -fr build intrepyd.egg-info intrepyd/license.json
 
 wheels:
+	@$(PYTHON) -c "import sys; v = tuple(int(x) for x in '$(INTREPID_VERSION)'.split('.')[:2]); sys.exit(v >= (1, 7) and not '$(WHEEL_LICENSE)')" || \
+		{ echo "Error: intrepid $(INTREPID_VERSION) runs its engines under a license only: give the wheels theirs, WHEEL_LICENSE=..."; exit 1; }
 	@rm -fr dist
 	@for platform in $(PLATFORMS); do \
 		$(MAKE) --no-print-directory wheel PLATFORM=$$platform || exit 1; \

@@ -6,6 +6,10 @@
 # read access to the contents of formalmethods/intrepid. The workflow's own
 # GITHUB_TOKEN only reaches this repository, so it cannot be used.
 #
+# intrepid 1.7 and later run their engines under a license only: the tests
+# get one from the INTREPID_LICENSE secret, the JSON of a license for the
+# intrepid release they test against (an older release needs none).
+#
 # The release workflow runs it too, before publishing anything.
 
 name: test
@@ -54,4 +58,6 @@ jobs:
         run: python -m mypy
 
       - name: Test
+        env:
+          INTREPID_LICENSE: ${{ secrets.INTREPID_LICENSE }}
         run: python -m unittest discover -v

@@ -52,10 +52,19 @@ jobs:
       - name: Check the version
         run: python tools/check_release.py check --tag "$GITHUB_REF_NAME"
 
+      # the noncommercial license each wheel carries next to the library,
+      # issued for a year from the release: the INTREPYD_WHEEL_LICENSE secret
       - name: Build the wheels
         env:
           GITHUB_TOKEN: ${{ secrets.INTREPID_TOKEN }}
-        run: make wheels PYTHON=python
+          WHEEL_LICENSE_TEXT: ${{ secrets.INTREPYD_WHEEL_LICENSE }}
+        run: |
+          if [ -n "$WHEEL_LICENSE_TEXT" ]; then
+            printf '%s' "$WHEEL_LICENSE_TEXT" > "$RUNNER_TEMP/license.json"
+            make wheels PYTHON=python WHEEL_LICENSE="$RUNNER_TEMP/license.json"
+          else
+            make wheels PYTHON=python
+          fi
 
       - name: Write the release notes
         run: python tools/check_release.py notes dist/NOTES.md

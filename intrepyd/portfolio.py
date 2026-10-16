@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, cast
 from intrepyd.api import Net
 from intrepyd.engine import Bmc, Engine, EngineResult
 from intrepyd.recipe import replay
+from intrepyd.license import require_license
 
 if TYPE_CHECKING:
     from intrepyd.context import Context
@@ -112,6 +113,9 @@ class Portfolio(Engine):  # pylint: disable=abstract-method,too-many-instance-at
         """
         if not self.targets:
             raise ValueError('The portfolio has no targets')
+        # the engines' license, checked here: in the processes, its error
+        # would only make each engine fail, and the answer UNKNOWN
+        require_license()
         recipe = self.context.recipe
         recipe.check()
         targets = [recipe.ref(target) for target in self.targets]

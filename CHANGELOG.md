@@ -4,6 +4,17 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.26.0
+
+- The engines' license. From intrepid 1.7 the engines run under a license
+  only (building, simulating and exporting circuits need none):
+  `intrepyd.license` gives one (`set_license`, `set_license_file`, which also
+  pass it to the processes of the portfolio) and tells the one in use
+  (`license_info`). The wheels carry a noncommercial license, valid for a
+  year from their release; `make wheels` needs it, as `WHEEL_LICENSE`, for an
+  intrepid that asks for licenses. The guide's *The engines' license* says
+  where a license is looked for. The tests get one from `INTREPID_LICENSE`.
+
 ## 0.25.0
 
 - Diagrams may carry a `requirement` section: the requirement the circuit

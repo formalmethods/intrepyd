@@ -26,7 +26,7 @@ import sys
 from typing import NewType
 
 __all__ = ['INT_ENGINE_RESULT_UNKNOWN', 'INT_ENGINE_RESULT_REACHABLE',
-           'INT_ENGINE_RESULT_UNREACHABLE', 'FUNCTIONS', 'LIBRARY_PATH', 'HAS_CERTIFICATES',
+           'INT_ENGINE_RESULT_UNREACHABLE', 'FUNCTIONS', 'LIBRARY_PATH', 'HAS_CERTIFICATES', 'HAS_LICENSE',
            'Net', 'Type']
 
 # The python-level types of the values this binding exchanges, for annotating
@@ -197,6 +197,12 @@ br_get_certificate = _bind_if_present('br_get_certificate', STR, (HANDLE,), '1.4
 set_pdr_produce_certificates = _bind_if_present('set_pdr_produce_certificates', VOID, (HANDLE,), '1.4')
 pdr_get_certificate = _bind_if_present('pdr_get_certificate', STR, (HANDLE,), '1.4')
 HAS_CERTIFICATES = hasattr(_lib, 'pdr_get_certificate')
+# The license the engines run under, since intrepid 1.7 (see intrepyd.license);
+# never recorded by the library's API trace
+set_license = _bind_if_present('set_license', VOID, (STR,), '1.7')
+set_license_file = _bind_if_present('set_license_file', VOID, (STR,), '1.7')
+license_info = _bind_if_present('license_info', STR, (), '1.7')
+HAS_LICENSE = hasattr(_lib, 'license_info')
 trace_prepare_value_for_net = _bind('trace_prepare_value_for_net', UINT, (HANDLE, HANDLE, UINT, UINT))
 prepare_value_for_net = _bind('prepare_value_for_net', UINT, (HANDLE, UINT))
 value_at = _bind('value_at', CHAR, (UINT,))

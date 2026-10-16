@@ -77,6 +77,16 @@ source venv/bin/activate
 pip install intrepyd
 ```
 
+### The engines' license
+
+From intrepid 1.7, the engines run under a license only (building and
+simulating circuits need none). Each wheel carries a noncommercial license,
+valid for a year from its release, for the noncommercial use the license of
+intrepyd allows; a company gives its commercial license with
+`intrepyd.license.set_license_file(path)`, the `INTREPID_LICENSE` environment
+variable (a path, or the license's JSON), or `~/.intrepid/license.json`. See
+[the engines' license](https://formalmethods.github.io/intrepyd/guide/license/).
+
 ## Working from Source
 
 ```
@@ -121,6 +131,10 @@ make fetch_intrepid INTREPID_DIR=../intrepid
 `INTREPID_DIR` also takes a release archive, or an extracted one. Finally, the
 `INTREPID_LIBRARY` environment variable overrides all of this at run time: set
 it to the path of a library file and `intrepyd.api` loads that one.
+
+A local build of intrepid 1.7 or later needs a license for its engines, in
+`INTREPID_LICENSE`, for the tests too; `make wheels` needs `WHEEL_LICENSE`,
+the noncommercial license the wheels carry.
 
 `make fetch_intrepid` also copies the library's license to
 `intrepyd/LICENSE.intrepid`, and its header to `.intrepid/Intrepid.h`, where

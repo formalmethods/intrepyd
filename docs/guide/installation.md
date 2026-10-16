@@ -26,6 +26,9 @@ source venv/bin/activate
 pip install intrepyd
 ```
 
+The engines need a license from intrepid 1.7: the wheel carries a
+noncommercial one; see [the engines' license](license.md).
+
 ## Working from source
 
 ```bash

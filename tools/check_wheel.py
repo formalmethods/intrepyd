@@ -2,7 +2,10 @@
 """
 Checks an installed intrepyd wheel, for the release workflow: that it has the
 version of VERSION, holds its license files and nothing but the intrepyd
-package, and that its intrepid library loads and works, with every engine.
+package, and that its intrepid library loads and works, with every engine;
+and, with an intrepid that runs its engines under a license only, that the
+library checks licenses with the production key and that the wheel carries
+a valid noncommercial license for them.
 
 Run it as a script, after installing the wheel:
 
@@ -49,6 +52,29 @@ def check_installation():
     if any('/tests/' in path for path in files):
         sys.exit('Error: the wheel contains the tests')
     print('# intrepyd %s installed in %s' % (installed, location))
+
+
+def check_license():
+    from intrepyd import api
+    if not api.HAS_LICENSE:
+        print('# The intrepid library needs no license')
+        return
+    import intrepyd.license
+    info = intrepyd.license.license_info()
+    if info.get('key') != 'production':
+        sys.exit('Error: the intrepid library checks licenses with the %s key, '
+                 'not the production one' % info.get('key'))
+    bundled = os.path.join(os.path.dirname(os.path.abspath(api.LIBRARY_PATH)), 'license.json')
+    if not os.path.isfile(bundled):
+        sys.exit('Error: the wheel carries no license next to the library')
+    if os.environ.get('INTREPID_LICENSE') or info.get('source') != bundled:
+        sys.exit('Error: run the check without a license of the user (INTREPID_LICENSE, '
+                 '~/.intrepid/license.json): it found %s' % info.get('source'))
+    if not info.get('valid') or info.get('kind') != 'noncommercial':
+        sys.exit('Error: the license the wheel carries is not a valid noncommercial one: %s'
+                 % info)
+    print('# The wheel carries a noncommercial license, %s, until %s'
+          % (info['id'], info['expires']))
 
 
 def check_engines():
@@ -99,6 +125,7 @@ def check_engines():
 
 def main():
     check_installation()
+    check_license()
     check_engines()
 
 
