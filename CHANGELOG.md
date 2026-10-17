@@ -4,7 +4,7 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
-## 0.26.1
+## 0.27.0
 
 - The first valid license is used. A license that is not valid (one for
   another build of intrepid, or one expired) no longer hides a valid one
