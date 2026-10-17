@@ -19,6 +19,9 @@ endif
 #   make fetch_intrepid INTREPID_DIR=../intrepid
 # PLATFORM picks another platform's release, e.g. to build its wheel:
 #   make wheel PLATFORM=windows-x86_64
+# A release package is used only if its SHA-256 is the one pinned in
+# INTREPID_SHA256: after changing INTREPID_VERSION, run 'make pin_intrepid'
+# and commit both.
 INTREPID_DIR?=
 PLATFORM?=
 INTREPID_REPO=formalmethods/intrepid
@@ -38,7 +41,7 @@ WHEEL_LICENSE?=
 FETCH_ARGS=$(if $(INTREPID_DIR),--from $(INTREPID_DIR),) \
            $(if $(PLATFORM),--platform $(PLATFORM),)
 
-.PHONY: all all_linters all_tests bootstrap_linux install_dev fetch_intrepid \
+.PHONY: all all_linters all_tests bootstrap_linux install_dev fetch_intrepid pin_intrepid \
 	linter_python typecheck_python tests_python coverage_python install_intrepyd \
 	build_docs serve_docs wheel wheels release undorelease
 
@@ -62,6 +65,11 @@ install_dev:
 
 fetch_intrepid:
 	@$(PYTHON) fetch_intrepid.py $(FETCH_ARGS)
+
+# The digests of the packages of INTREPID_VERSION, for every platform, into
+# INTREPID_SHA256 (an immutable intrepid release only)
+pin_intrepid:
+	@$(PYTHON) fetch_intrepid.py --pin $(PLATFORMS)
 
 # Fails if the score drops below fail-under in .pylintrc
 linter_python:
@@ -123,9 +131,10 @@ wheels:
 # of every platform, checks them, publishes them on PyPI and makes a GitHub
 # release. The commit must already be on $(REMOTE)/$(BRANCH); VERSION must be
 # later than every version on PyPI, and have a section in CHANGELOG.md; and the
-# intrepid release in INTREPID_VERSION must be published with a package for
-# every platform, so the release workflow can fetch the library (it would
-# otherwise tag, then fail downloading a missing package).
+# intrepid release in INTREPID_VERSION must be published, immutable, with a
+# package for every platform whose digest is pinned in INTREPID_SHA256, so the
+# release workflow can fetch the library (it would otherwise tag, then fail
+# downloading a missing or unpinned package).
 release:
 	@test -z "$$(git status --porcelain)" || \
 		{ echo "Error: the working tree has uncommitted changes"; exit 1; }
@@ -134,7 +143,7 @@ release:
 	@$(PYTHON) tools/check_release.py check
 	@for platform in $(PLATFORMS); do \
 		$(PYTHON) fetch_intrepid.py --check --platform $$platform || \
-			{ echo "Error: intrepid v$(INTREPID_VERSION) is not available for $$platform; release intrepid first, or fix INTREPID_VERSION"; exit 1; }; \
+			{ echo "Error: intrepid v$(INTREPID_VERSION) is not available, immutable and pinned for $$platform; release intrepid first, fix INTREPID_VERSION, or make pin_intrepid"; exit 1; }; \
 	done
 	@git fetch --quiet --tags $(REMOTE) $(BRANCH) 2>/dev/null || \
 		{ echo "Error: cannot fetch $(BRANCH) from $(REMOTE): push it first"; exit 1; }

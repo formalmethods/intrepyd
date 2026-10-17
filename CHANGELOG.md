@@ -4,6 +4,20 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.26.1
+
+- The first valid license is used. A license that is not valid (one for
+  another build of intrepid, or one expired) no longer hides a valid one
+  further down the order: `INTREPID_LICENSE`, `~/.intrepid/license.json`, the
+  wheel's. `license_info` lists those passed over under `skipped`, each with
+  where it is and why; when none is valid, the error gives each one's reason.
+  A license given with `set_license` or `set_license_file` is still the one
+  used, valid or not. Needs intrepid 1.7.1.
+- The intrepid library in the wheels is the one intrepid released: its
+  packages are pinned by their SHA-256 (`INTREPID_SHA256`, written by `make
+  pin_intrepid` from an immutable release), and one with another digest,
+  downloaded or cached, is refused.
+
 ## 0.26.0
 
 - The engines' license. From intrepid 1.7 the engines run under a license

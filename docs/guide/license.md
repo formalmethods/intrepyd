@@ -16,8 +16,7 @@ one.
 ## Commercial use
 
 A company uses the commercial license it was given, a JSON file, in one of
-these ways. intrepid looks for a license in this order, and uses the first it
-finds:
+these ways. intrepid looks for a license in this order:
 
 1. given by the program:
 
@@ -33,6 +32,11 @@ finds:
 3. the file `~/.intrepid/license.json` (`%APPDATA%\intrepid\license.json` on
    Windows);
 4. the noncommercial license the wheel carries.
+
+One given by the program is the one used. Otherwise the first valid one is,
+and those before it are passed over: an expired license, or one for another
+build of intrepid, does not hide the wheel's. `license_info()` lists them
+under `skipped`, each with where it is and why it was passed over.
 
 A commercial license keeps working, after it expires, for the releases of
 intrepid made before then: a later release needs it renewed.

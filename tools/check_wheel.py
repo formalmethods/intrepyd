@@ -5,7 +5,10 @@ version of VERSION, holds its license files and nothing but the intrepyd
 package, and that its intrepid library loads and works, with every engine;
 and, with an intrepid that runs its engines under a license only, that the
 library checks licenses with the production key and that the wheel carries
-a valid noncommercial license for them.
+a noncommercial license for them, valid for at least WHEEL_LICENSE_MIN_DAYS
+from the release (a year, give or take the days between issuing it and
+releasing): a license left from an earlier release would stop its users' engines
+soon after they install it.
 
 Run it as a script, after installing the wheel:
 
@@ -16,11 +19,13 @@ not the current directory, first on the path; it fails if it finds the
 sources instead.
 """
 
+import datetime
 import os
 import sys
 from importlib import metadata
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WHEEL_LICENSE_MIN_DAYS = 360
 
 
 def check_installation():
@@ -70,11 +75,24 @@ def check_license():
     if os.environ.get('INTREPID_LICENSE') or info.get('source') != bundled:
         sys.exit('Error: run the check without a license of the user (INTREPID_LICENSE, '
                  '~/.intrepid/license.json): it found %s' % info.get('source'))
-    if not info.get('valid') or info.get('kind') != 'noncommercial':
-        sys.exit('Error: the license the wheel carries is not a valid noncommercial one: %s'
-                 % info)
+    problem = wheel_license_problem(info, datetime.date.today())
+    if problem:
+        sys.exit('Error: ' + problem)
     print('# The wheel carries a noncommercial license, %s, until %s'
           % (info['id'], info['expires']))
+
+
+def wheel_license_problem(info, today, min_days=WHEEL_LICENSE_MIN_DAYS):
+    """Why the license the wheel carries (license_info of it) will not do for
+    a release made on <today>, or None"""
+    if not info.get('valid') or info.get('kind') != 'noncommercial':
+        return 'the license the wheel carries is not a valid noncommercial one: %s' % info
+    left = (datetime.date.fromisoformat(info['expires']) - today).days
+    if left < min_days:
+        return ('the license the wheel carries, %s, expires on %s, in %d days: a release '
+                'needs one for at least %d (renew INTREPYD_WHEEL_LICENSE)'
+                % (info['id'], info['expires'], left, min_days))
+    return None
 
 
 def check_engines():

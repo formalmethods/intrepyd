@@ -3,7 +3,7 @@ The license intrepid's engines run under.
 
 The engines (BMC and k-induction, backward reachability, PDR) need a valid
 license; building circuits, simulating them, exporting them do not. intrepid
-looks for the license in this order, and uses the first it finds:
+looks for the license in this order:
 
 1. the one given with :func:`set_license` or :func:`set_license_file`;
 2. the ``INTREPID_LICENSE`` environment variable: the path of the license's
@@ -15,6 +15,11 @@ looks for the license in this order, and uses the first it finds:
    release, for the noncommercial use the license of intrepyd allows (see
    LICENSE.md). A commercial use needs a commercial license, given in one of
    the ways above.
+
+One given with :func:`set_license` or :func:`set_license_file` is the one
+used. Otherwise the first valid one is, and those before it are passed over
+(``skipped`` in :func:`license_info`): a license for another build of
+intrepid, or one expired, does not hide the wheel's.
 
 Without a valid license, making an engine raises RuntimeError saying why: no
 license found (and where it was looked for), a signature that is not valid, a
@@ -64,9 +69,10 @@ def require_license() -> None:
 def license_info() -> Optional[Dict[str, Any]]:
     """The license the engines run under: its fields (but its signature),
     ``valid``, ``error`` when it is not valid or none was found, ``source``
-    (where it was found), ``key`` and ``release`` (the key this intrepid
-    checks licenses with, and its release date). None for an intrepid library
-    older than 1.7, which needs no license."""
+    (where it was found), ``skipped`` (those passed over before it, each with
+    its ``source`` and ``error``, when there are any), ``key`` and ``release``
+    (the key this intrepid checks licenses with, and its release date). None
+    for an intrepid library older than 1.7, which needs no license."""
     if not api.HAS_LICENSE:
         return None
     return json.loads(api.license_info())

@@ -120,6 +120,14 @@ downloads, for the current platform, the release of intrepid named in
 The repository is private, so the download needs a GitHub token with read
 access to it, from `GITHUB_TOKEN` or from `gh auth login`.
 
+A release package is used only if its SHA-256 is the one pinned in
+`INTREPID_SHA256` (the format of `sha256sum`, a line per platform), whether
+it is downloaded or found in the cache, `.intrepid/`: the wheels carry the
+library intrepid released, and nothing else. After changing
+`INTREPID_VERSION`, `make pin_intrepid` writes the new digests, as GitHub
+gives them, for an immutable release only (whose packages can no longer be
+replaced); commit the two files together.
+
 To work against a local checkout of intrepid instead, build it there and point
 `INTREPID_DIR` at it:
 
@@ -148,6 +156,7 @@ The default `make` target runs the whole pipeline:
 | Target                 | What it does                                                       |
 | ---------------------- | ------------------------------------------------------------------ |
 | `fetch_intrepid`       | Puts the intrepid library into `intrepyd/` (see above)             |
+| `pin_intrepid`         | Pins the digests of `INTREPID_VERSION`'s packages (see above)      |
 | `all_linters`          | Runs pylint over `intrepyd` (fails below the score in `.pylintrc`)  |
 | `all_tests`            | Runs the python test suite                                         |
 
@@ -263,6 +272,7 @@ builds it into `site/`. Both need the `docs` dependency group
 | `setup.py`              | Tags each wheel for the platform of the library it holds        |
 | `VERSION`               | The version of intrepyd                                         |
 | `INTREPID_VERSION`      | The release of intrepid this version of intrepyd is built on    |
+| `INTREPID_SHA256`       | The SHA-256 of that release's packages, the only ones used      |
 | `CHANGELOG.md`          | The changes of each release, which become its release notes     |
 | `mkdocs.yml`            | Configuration of the documentation site                         |
 | `docs/`                 | Sources of the documentation site (tutorial, guide, API reference) |
@@ -279,8 +289,8 @@ of the documentation site:
 
 In short: `intrepyd/api.py` binds intrepid's C API, `Intrepid.h`, with
 `ctypes`, and the rest of intrepyd talks to the library only through it; moving
-to a new intrepid release is `INTREPID_VERSION` plus `make fetch_intrepid && make`
-(with `test_api.py` reporting any signature that drifted); and releases are cut
+to a new intrepid release is `INTREPID_VERSION` plus `make pin_intrepid
+fetch_intrepid && make` (with `test_api.py` reporting any signature that drifted); and releases are cut
 with `make release`, which tags `v<VERSION>` and lets CI build, check and
 publish the wheels. The guide has the details.
 

@@ -71,7 +71,9 @@ the library serves every python version.
 ## Moving to a new intrepid release
 
 `api.py` is the one place tied to the C API. To move to a new release of
-intrepid, set `INTREPID_VERSION` and run `make fetch_intrepid && make`. If the
-C API changed, `test_api.py` reports the functions whose signature no longer
-matches the checked-in `Intrepid.h`; update the `_bind` lines in `api.py` to
-follow.
+intrepid, set `INTREPID_VERSION` and run `make pin_intrepid fetch_intrepid &&
+make`: `pin_intrepid` writes the SHA-256 of the release's packages into
+`INTREPID_SHA256`, and `fetch_intrepid` uses a package only if it is the one
+pinned there; commit both files. If the C API changed, `test_api.py` reports
+the functions whose signature no longer matches the checked-in `Intrepid.h`;
+update the `_bind` lines in `api.py` to follow.

@@ -18,7 +18,8 @@ hand. To make one:
 
 1. Set `VERSION` to the new version. PyPI never accepts a version twice, so it
    must be later than every version already there. Set `INTREPID_VERSION` to
-   the intrepid release to build on, if it changed.
+   the intrepid release to build on, if it changed, and pin its packages with
+   `make pin_intrepid`, which writes their SHA-256 into `INTREPID_SHA256`.
 2. Add a `## <VERSION>` section to `CHANGELOG.md`, saying what changed for
    users: it becomes the notes of the release.
 3. Commit, push to `main`, wait for the tests to pass, then run `make release`.
@@ -26,8 +27,9 @@ hand. To make one:
 `make release` refuses if the working tree has uncommitted changes, if the
 branch is not `main` or is not pushed, if the tag already exists, if PyPI
 already has `VERSION` or a later version, if `CHANGELOG.md` has no section for
-it, or if the intrepid release in `INTREPID_VERSION` is not published with a
-package for every platform (`fetch_intrepid.py --check` for each, so the release
+it, or if the intrepid release in `INTREPID_VERSION` is not published,
+immutable, with a package for every platform whose SHA-256 is the one pinned
+in `INTREPID_SHA256` (`fetch_intrepid.py --check` for each, so the release
 workflow cannot tag and then fail downloading a library that is not there yet —
 for instance when the pin was bumped to an intrepid release that has not
 finished publishing). Otherwise it tags the commit and pushes the tag, which
@@ -35,14 +37,22 @@ starts `.github/workflows/release.yml`:
 
 1. the tests of `test.yml`, on every platform and python version;
 2. the version checks again, against the tag;
-3. the wheels of both platforms, built with `make wheels`;
+3. the wheels of both platforms, built with `make wheels`, each carrying the
+   noncommercial license of the `INTREPYD_WHEEL_LICENSE` secret;
 4. each wheel installed on its platform, under python 3.11 and 3.13, and
-   checked by `tools/check_wheel.py`: version, license files, contents, and
-   every engine on a small model;
+   checked by `tools/check_wheel.py`: version, license files, contents, the
+   noncommercial license (valid, of the production key, for at least 360
+   days: a license left from an earlier release is refused), and every engine
+   on a small model;
 5. the wheels published on PyPI;
 6. a GitHub release with the wheels and the `CHANGELOG.md` section.
 
 Nothing is published unless every check succeeds.
+
+The noncommercial license is issued for a year at each release, signed with
+the production key, and set as the `INTREPYD_WHEEL_LICENSE` secret before the
+tag is pushed, for instance with
+`gh secret set INTREPYD_WHEEL_LICENSE --repo formalmethods/intrepyd < license.json`.
 
 !!! tip "If the workflow fails"
     If it fails before PyPI, fix the cause, run `make undorelease` to delete

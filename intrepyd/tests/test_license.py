@@ -89,6 +89,40 @@ class TestLicense(unittest.TestCase):
         self.assertIn(info['key'], ('development', 'production', 'custom'))
         self.assertEqual(_run(ENGINE, dict(os.environ)).stdout.strip(), 'EngineResult.REACHABLE')
 
+    @unittest.skipUnless(os.environ.get('INTREPID_LICENSE'),
+                         'set INTREPID_LICENSE to a valid license')
+    def test_one_not_valid_does_not_hide_a_valid_one(self):
+        """The first valid license is used: those before it are passed over, and told"""
+        given = os.environ['INTREPID_LICENSE']
+        if given.lstrip().startswith('{'):
+            text = given
+        else:
+            with open(given, encoding='utf-8') as f:
+                text = f.read()
+        with tempfile.TemporaryDirectory() as home:
+            os.makedirs(os.path.join(home, '.intrepid'))
+            os.makedirs(os.path.join(home, 'intrepid'))
+            for folder in ('.intrepid', 'intrepid'):  # HOME's, and APPDATA's on Windows
+                with open(os.path.join(home, folder, 'license.json'), 'w', encoding='utf-8') as f:
+                    f.write(text)
+            missing = os.path.join(home, 'none.json')
+            env = dict(os.environ, INTREPID_LICENSE=missing, HOME=home, APPDATA=home)
+            run = _run('import json, intrepyd.license as lic\n'
+                       'print(json.dumps(lic.license_info()))\n' + ENGINE, env)
+            lines = run.stdout.splitlines()
+            info = json.loads(lines[0]) if lines else {}
+            if not info.get('valid') and 'skipped' not in info and \
+                    'cannot be read' in info.get('error', ''):
+                self.skipTest('this intrepid uses the first license found, valid or not '
+                              '(older than 1.7.1)')
+            self.assertEqual(len(lines), 2, run.stderr)
+            self.assertTrue(info['valid'], info)
+            self.assertIn(info['source'], (os.path.join(home, '.intrepid', 'license.json'),
+                                           os.path.join(home, 'intrepid', 'license.json')))
+            self.assertEqual(info['skipped'][0]['source'], missing + ' (INTREPID_LICENSE)')
+            self.assertIn('cannot be read', info['skipped'][0]['error'])
+            self.assertEqual(lines[1], 'EngineResult.REACHABLE')
+
 
 if __name__ == '__main__':
     unittest.main()
