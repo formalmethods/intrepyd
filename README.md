@@ -302,7 +302,7 @@ noncommercial organizations of the PolyForm Noncommercial License 1.0.0,
 under which it is released from version 0.15.0 on, see
 [LICENSE.md](LICENSE.md). Any other use, in particular by companies for a
 commercial purpose, requires a commercial license: write to
-`roberto.bruttomesso@gmail.com`. Versions up to 0.14.0 were released under
+`license@intrepid-studio.eu`. Versions up to 0.14.0 were released under
 the BSD 3-Clause license.
 
 The intrepid library it bundles is proprietary; its license, installed as

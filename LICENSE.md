@@ -4,7 +4,7 @@ use by educational institutions and public research organizations, as the
 PolyForm Noncommercial License 1.0.0 below defines them. Any other use, in
 particular by companies for a commercial purpose, requires a commercial
 license, which the author grants on request: write to
-roberto.bruttomesso@gmail.com. Earlier versions of intrepyd were released
+license@intrepid-studio.eu. Earlier versions of intrepyd were released
 under the BSD 3-Clause license.
 
 This license does not cover the intrepid library (libintrepid.so,

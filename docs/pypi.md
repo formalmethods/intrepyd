@@ -45,7 +45,7 @@ Intrepyd is free for noncommercial purposes, such as personal use and use
 by universities and public research organizations, under the PolyForm
 Noncommercial License 1.0.0. Any other use, in particular by companies for a
 commercial purpose, requires a commercial license: write to
-roberto.bruttomesso@gmail.com. Versions up to 0.14.0 were released under the
+license@intrepid-studio.eu. Versions up to 0.14.0 were released under the
 BSD 3-Clause license. The intrepid library bundled in the wheels is
 proprietary, and its license, installed as `intrepyd/LICENSE.intrepid`,
 allows it to be used and redistributed, unmodified, as part of intrepyd,
