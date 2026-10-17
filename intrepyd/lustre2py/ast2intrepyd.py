@@ -126,11 +126,12 @@ def _contains(expression, var):
     raise TypeError('Unhandled kind' + expression.kind)
 
 
-class Ast2Intrepyd(Visitor):
+class Ast2Intrepyd(Visitor):  # pylint: disable=too-many-instance-attributes
     """
     Visitor for printing AST on stdout
     """
-    def __init__(self, node2proto, realtype):
+    def __init__(self, node2proto, realtype, top=None):
+        self._top = top
         self._result = ''
         self._main_node = None
         self._properties = []
@@ -150,7 +151,7 @@ class Ast2Intrepyd(Visitor):
         self._nid += 1
         return f'"{name}.{self._nid}"'
 
-    def _visit_node(self, node):
+    def _visit_node(self, node):  # pylint: disable=too-many-locals
         assert isinstance(node, Node)
         self._pre_decls = set()
         self._var2datatype = {}
@@ -167,6 +168,15 @@ class Ast2Intrepyd(Visitor):
             out.accept(self)
         for equat in node.equations:
             equat.accept(self)
+        # the properties and the assertions, built before the latches are
+        # closed: their pre make latches too
+        checks = []
+        for prop, label in zip(node.properties, node.property_labels):
+            net = prop.accept(self)
+            self._properties.append(net)
+            checks.append(('_lustre_property', label, net))
+        for expr, label in zip(node.assertions, node.assertion_labels):
+            checks.append(('_lustre_assumption', label, expr.accept(self)))
         for latch_decl in self._latch_decls:
             new_name, init, operand = latch_decl
             # self._result += DTAB + 'if ' + operand + ' in ' + LATCH2PRE + ':\n'
@@ -176,8 +186,10 @@ class Ast2Intrepyd(Visitor):
             self._result += DTAB + CONTEXT +\
                             '.set_latch_init_next(' + new_name + ', ' +\
                                                   init + ', ' + operand + ')\n'
-        for prop in node.properties:
-            self._properties.append(prop.accept(self))
+        for method, label, net in checks:
+            # named after the node, but for the top one's
+            name = label if node.name == self._top else f'{node.name}.{label}'
+            self._result += DTAB + 'self.' + method + '("' + name + '", ' + net + ')\n'
         sep = ''
         for out in node.output_decls:
             for var in out.variables:

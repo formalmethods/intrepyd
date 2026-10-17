@@ -46,6 +46,52 @@ are also much easier for the engines: on the Kind2 benchmarks shipped in
 models with `'int'` against 495 with `'int32'`, and backward reachability 665
 against 382.
 
+### Properties, assertions, and what is refused
+
+The translated circuit keeps what the model checks and what it assumes:
+
+- each `--%PROPERTY e;` is in `circuit.properties`, by name (the variable, if
+  the property is one, as in `--%PROPERTY OK;`, else `property_line<N>`; the
+  properties of a node other than the top one are prefixed with the node's
+  name). A property holds when the net is always true;
+- each `assert e;` is an assumption: the circuit calls `push_assumption` on
+  it, so that every engine considers only the runs where it holds, and it is
+  in `circuit.assumptions`, by name.
+
+```python
+encoding = translate_lustre('model.lus', 'top', 'real', 'encoding', inttype='int')
+circuit = encoding.mk_instance(ctx, 'model')
+circuit.mk_circuit()
+for name, net in circuit.properties.items():
+    br = ctx.mk_backward_reach()
+    br.add_target(ctx.mk_not(net))
+    print(name, br.reach_targets())
+```
+
+The top node is the one given, else the one `--%MAIN` marks, else the only
+node no other calls. A syntax error, and a construct the front end does not
+translate (arrays, records, enumerations, subranges, constants, type
+definitions, `condact`, casts, `--%IVC` and `--%REALIZABLE`), raise
+`intrepyd.lustre2py.errors.LustreError`, with the line and the column; so do
+Kind2's contracts (`--@require`, `--@ensure`, `(*@contract ... *)`, contract
+nodes), which are not handled.
+
+### As a circuit for the editors
+
+`python -m intrepyd.export` takes a Lustre file as well as a program, and
+writes the circuit of its top node as a netlist (version 3), which the
+circuit editor of the VS Code extension and Intrepid Studio open as a
+diagram: the properties as assertion blocks, the assertions as assumption
+blocks, each node instance a sub-system.
+
+```console
+$ python -m intrepyd.export model.lus --describe     # its nodes, the top one, whether it uses int and real
+$ python -m intrepyd.export model.lus --int int --real real [--node top] -o model.json
+```
+
+The encodings of `int` and `real` are to be given when the model uses them:
+none is chosen for you.
+
 ## IEC 61131-3 Structured Text (PLCopen XML)
 
 ```python

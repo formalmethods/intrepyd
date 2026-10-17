@@ -13,7 +13,11 @@ JSON schema (``version`` 2)
 ---------------------------
 
 Version 2 adds ``file``/``line`` to a node; version 1 is the same without them,
-and a reader should accept both.
+and a reader should accept both. Version 3, written only for a circuit that has
+them, adds two kinds of node: ``"assertion"`` (a property that must always
+hold, named, its one input ``in`` the condition) and ``"assumption"`` (a
+condition the inputs are constrained to at every step, from
+``push_assumption``, named, its input ``in``).
 
 ::
 
@@ -31,6 +35,9 @@ and a reader should accept both.
           "value": <str>,         # for a const: "0", "true", "?", ... (else absent)
           "group": <str>,         # the namespace of the name, e.g. "Counter" for
                                   #   "Counter.q" (else absent)
+          "scope": <str>,         # the namespaces pushed when the net was made,
+                                  #   joined by "/" (else absent): a Lustre
+                                  #   node instance, say ("sat.1/max.2")
           "file":  <str>,         # the source file that built the net (else absent)
           "line":  <int>,         # the line in "file" that built it (with "file")
           "output": true          # present only when the net is tagged an output
@@ -93,8 +100,11 @@ for _cast in ("int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "u
     _PORTS["mk_cast_to_" + _cast] = ["in"]
 
 
-def to_graph(context):
-    """The circuit of ``context`` as a JSON-able dict following the schema above."""
+def to_graph(context, assertions=None, assumption_names=None):
+    """The circuit of ``context`` as a JSON-able dict following the schema above.
+    ``assertions`` (name -> net) are the properties to show as assertion nodes;
+    the assumptions the context was given (push_assumption) are assumption
+    nodes, named by ``assumption_names`` (net -> name) if it names them."""
     recipe = context.recipe
     # The net each call produced. The recipe records it per call; inverting its
     # references instead would lose every call but the last that returned a
@@ -119,7 +129,39 @@ def to_graph(context):
     net2name = dict(getattr(context, "net2name", {}))
     output_nets = set(getattr(context, "outputs", {}).values())
 
-    return _build(recipe.calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc)
+    graph = _build(recipe.calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc)
+    _add_checks(graph, recipe.calls, idx2net, attr_nets, assertions or {}, assumption_names or {})
+    return graph
+
+
+def _add_checks(graph, calls, idx2net, attr_nets, assertions, assumption_names):  # pylint: disable=too-many-locals,too-many-arguments,too-many-positional-arguments
+    """The assertions and the assumptions, as nodes of their own (version 3),
+    each wired from the net it checks or assumes."""
+    assumed = []
+    for method, args, _kwargs in calls:
+        if method in ("push_assumption", "mk_assumption") and args:
+            kind, value = args[0]
+            net = idx2net.get(value) if kind == "net" else attr_nets.get(value)
+            if net is not None:
+                assumed.append(net)
+        elif method == "pop_assumption" and assumed:
+            assumed.pop()
+    checks = [("assertion", name, net) for name, net in assertions.items()]
+    for k, net in enumerate(assumed, start=1):
+        name = assumption_names.get(net) or ("assume" if k == 1 else f"assume{k}")
+        checks.append(("assumption", name, net))
+    if not checks:
+        return
+    present = {n["id"] for n in graph["nodes"]}
+    next_id = max(present, default=0) + 1
+    for kind, name, net in checks:
+        if net not in present:
+            graph["nodes"].append({"id": net, "kind": "external", "name": None})
+            present.add(net)
+        graph["nodes"].append({"id": next_id, "kind": kind, "name": name})
+        graph["edges"].append({"from": net, "to": next_id, "port": "in"})
+        next_id += 1
+    graph["version"] = 3
 
 
 def to_json(context, indent=2):
@@ -158,14 +200,15 @@ def _trace_for(context, traces):
 
 
 def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc):
-    # pylint: disable=too-many-locals,too-many-statements  # one pass with a few local helpers
+    # pylint: disable=too-many-locals,too-many-statements,too-many-branches  # one pass, a few helpers
     nodes = {}
     edges = []
 
     def node(net, kind, op=None, type_=None, value=None):
         name = net2name.get(net)
-        if name is not None and name.startswith("__"):  # intrepyd's made-up name
-            name = None
+        made_up = name is not None and name.rsplit(".", 1)[-1].startswith("__")
+        if made_up and kind not in ("input", "latch"):
+            name = None  # intrepyd's, in a namespace or not (an input or a latch keeps it)
         entry = {"id": net, "kind": kind, "name": name}
         if op is not None:
             entry["op"] = op
@@ -180,6 +223,12 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
             entry["file"], entry["line"] = location[0], location[1]
         nodes[net] = entry
         return entry
+
+    scopes = {}
+
+    def scoped(net, space):
+        if space:
+            scopes[net] = "/".join(space)
 
     def ensure(net):
         """A node must exist for every net that an edge touches."""
@@ -212,8 +261,16 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
         edges.append({"from": src, "to": dst, "port": port})
 
     produced = set()
+    space = []  # the namespaces pushed: a net made inside them gets them as its scope
     for idx, (method, args, _kwargs) in enumerate(calls):
         net = idx2net.get(idx)
+        if method == "push_namespace" and args:
+            space.append(str(args[0][1]))
+            continue
+        if method == "pop_namespace":
+            if space:
+                space.pop()
+            continue
 
         if method == "set_latch_init_next":
             latch = as_net(args[0])
@@ -233,6 +290,7 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
         if net in predefined:
             ensure(net)  # mk_true(), or an expression simplified to true/false
             continue
+        scoped(net, space)
         if method == "mk_input":
             node(net, "input", type_=_type_name(args[1]))
             continue
@@ -251,6 +309,9 @@ def _build(calls, idx2net, attr_nets, predefined, net2name, output_nets, net2loc
     for net in output_nets:
         ensure(net)
         nodes[net]["output"] = True
+    for net, scope in scopes.items():
+        if net in nodes:
+            nodes[net]["scope"] = scope
 
     # A true/false that nothing reads (its uses simplified away by the library)
     # is not part of the circuit.
@@ -268,16 +329,82 @@ def _type_name(ref):
     return _TYPE_ATTR_TO_NAME.get(ref[1]) if ref[0] == "attr" else None
 
 
-def main(argv=None):
+INT_TYPES = ("int", "int8", "int16", "int32", "int64")
+REAL_TYPES = ("real", "float16", "float32", "float64")
+
+
+def lustre_graph(path, node=None, int_type=None, real_type=None):
+    """The circuit of a Lustre file's top node, as a graph: its properties as
+    assertion nodes, its assertions as assumption nodes. The encodings of int
+    and real are to be given when the model uses them (none is chosen
+    silently). Raises LustreError for a file that cannot be translated."""
+    # Imported late: they need the native library and ANTLR's runtime.
+    import tempfile  # pylint: disable=import-outside-toplevel
+    from intrepyd.context import Context  # pylint: disable=import-outside-toplevel
+    from intrepyd.lustre2py import translator  # pylint: disable=import-outside-toplevel
+    from intrepyd.lustre2py.errors import LustreError  # pylint: disable=import-outside-toplevel
+    about = translator.describe(path)
+    if about["int"] and int_type not in INT_TYPES:
+        raise LustreError("the model uses int: give its encoding, one of "
+                          f"{', '.join(INT_TYPES)} (--int)")
+    if about["real"] and real_type not in REAL_TYPES:
+        raise LustreError("the model uses real: give its encoding, one of "
+                          f"{', '.join(REAL_TYPES)} (--real)")
+    with tempfile.TemporaryDirectory() as folder:
+        module = f"{folder}/lustre_model.py"
+        translator.translate(path, node, module, real_type or "real", int_type or "int")
+        built = runpy.run_path(module)
+    ctx = Context()
+    circuit = built["mk_instance"](ctx, "top")
+    circuit.mk_circuit()
+    return to_graph(ctx, assertions=circuit.properties,
+                    assumption_names={net: name for name, net in circuit.assumptions.items()})
+
+
+def _lustre_main(args):
+    """The command line on a Lustre file: --describe, or its graph."""
+    from intrepyd.lustre2py import translator  # pylint: disable=import-outside-toplevel
+    from intrepyd.lustre2py.errors import LustreError  # pylint: disable=import-outside-toplevel
+    try:
+        if args.describe:
+            return json.dumps(translator.describe(args.program), indent=2)
+        return json.dumps(lustre_graph(args.program, args.node, args.int, args.real), indent=2)
+    except LustreError as err:
+        sys.exit(err.where(args.program))
+
+
+def main(argv=None):  # pylint: disable=too-many-locals
     """``python -m intrepyd.export program.py [-o out.json]``: run the program and
     export the circuit of the context it builds (the one with the most nets, if
-    it builds several) to ``out.json`` or standard output."""
+    it builds several) to ``out.json`` or standard output. On a Lustre file
+    (``model.lus [--node TOP] [--int T] [--real T]``), the circuit of its top
+    node; ``--describe`` says what the file is (its nodes, whether it uses int
+    and real) instead."""
     parser = argparse.ArgumentParser(description="Export an intrepyd circuit as a JSON graph.")
-    parser.add_argument("program", help="a python program that builds a Context")
+    parser.add_argument("program",
+                        help="a python program that builds a Context, or a Lustre file (.lus)")
     parser.add_argument("-o", "--out", help="write here instead of standard output")
     parser.add_argument("--all", action="store_true",
                         help="export every context built, as a JSON list")
+    lustre = parser.add_argument_group("a Lustre file")
+    lustre.add_argument("--node",
+                        help="its top node (default: --%%MAIN's, else the only one no other calls)")
+    lustre.add_argument("--int", choices=INT_TYPES,
+                        help="the encoding of int, when the model uses it")
+    lustre.add_argument("--real", choices=REAL_TYPES,
+                        help="the encoding of real, when the model uses it")
+    lustre.add_argument("--describe", action="store_true",
+                        help="say the file's nodes, and whether it uses int and real, as JSON")
     args = parser.parse_args(argv)
+
+    if args.program.endswith(".lus"):
+        payload = _lustre_main(args)
+        if args.out:
+            with open(args.out, "w", encoding="utf-8") as handle:
+                handle.write(payload + "\n")
+        else:
+            print(payload)
+        return
 
     # Imported late, on purpose: they need the native library, which neither the
     # exporter nor its tests require.

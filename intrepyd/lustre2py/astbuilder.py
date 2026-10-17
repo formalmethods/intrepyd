@@ -11,6 +11,12 @@ from intrepyd.lustre2py.expression import LiteralExpression, ZeroaryExpression,\
 from intrepyd.lustre2py.variable import VarDeclGroup
 from intrepyd.lustre2py.instruction import Equation
 from intrepyd.lustre2py.datatype import Primitive
+from intrepyd.lustre2py.errors import LustreError
+
+
+def _unsupported(ctx, what):
+    """Refuses a construct of the grammar this front end does not translate."""
+    raise LustreError(f'{what} are not supported', ctx.start.line, ctx.start.column + 1)
 
 class ASTBuilder(LustreVisitor):
     """
@@ -120,7 +126,12 @@ class ASTBuilder(LustreVisitor):
         return CallExpression(cid, params)
 
     def visitProp(self, ctx):
-        self._current_node.add_property(ctx.getChild(1).accept(self))
+        expr = ctx.getChild(1).accept(self)
+        self._current_node.add_property(expr, _label(expr, 'property', ctx))
+
+    def visitAssertion(self, ctx):
+        expr = ctx.getChild(1).accept(self)
+        self._current_node.add_assertion(expr, _label(expr, 'assumption', ctx))
 
     def visitMain(self, ctx):
         self._current_node.main = True
@@ -129,52 +140,69 @@ class ASTBuilder(LustreVisitor):
         return ctx.getText()
 
     def visitArrayEID(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'arrays')
 
     def visitRecordEID(self, ctx):
-        raise NotImplementedError
-
-    def visitAssertion(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'records')
 
     def visitIvc(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, '--%IVC annotations')
 
     def visitRealizabilityInputs(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, '--%REALIZABLE annotations')
 
     def visitCondactExpr(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'condact expressions')
 
     def visitCastExpr(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'casts (real, floor)')
 
     def visitRecordExpr(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'records')
 
     def visitArrayExpr(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'arrays')
 
     def visitArrayAccessExpr(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'arrays')
 
     def visitRecordAccessExpr(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'records')
 
     def visitPrimitiveType(self, ctx):
         return Primitive(ctx.getChild(0).getText())
 
     def visitSubrangeType(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'subrange types')
 
     def visitArrayType(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'arrays')
 
     def visitUserType(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'user-defined types')
 
     def visitRecordType(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'records')
 
     def visitEnumType(self, ctx):
-        raise NotImplementedError
+        _unsupported(ctx, 'enumerations')
+
+    def visitRecordUpdateExpr(self, ctx):
+        _unsupported(ctx, 'records')
+
+    def visitArrayUpdateExpr(self, ctx):
+        _unsupported(ctx, 'arrays')
+
+    def visitConstant(self, ctx):
+        _unsupported(ctx, 'constants')
+
+    def visitDatatypedef(self, ctx):
+        _unsupported(ctx, 'type definitions')
+
+
+def _label(expr, what, ctx):
+    """A property's or an assertion's name: the variable it is, else what it is
+    and its line."""
+    if expr.kind == Expression.ZEROARY:
+        return expr.name
+    return f'{what}_line{ctx.start.line}'

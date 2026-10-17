@@ -59,6 +59,10 @@ On top of the export's schema, a diagram has:
 - the properties to verify: ``"kind": "assertion"`` (its boolean input must
   always hold) and ``"kind": "target"`` (a boolean condition to reach), each
   named, with one input ``in``;
+- ``"kind": "assumption"`` blocks (named, one boolean input ``in``): a
+  condition the inputs are constrained to at every step, as a Lustre model's
+  ``assert``; verifying and the MC/DC tests consider only the runs where
+  every assumption holds (simulating does not check them);
 - ``"kind": "subsystem"`` blocks, a part of the circuit drawn as one block: the
   blocks inside it have ``"parent": <its id>`` (ids are unique in the whole
   diagram, and a wire joins two blocks of one sub-system, or two at the top).
@@ -380,7 +384,7 @@ def _decision_source(nodes, into, decision):
     if node is None:
         raise DiagramError(f"no block {decision} to be a decision (a sub-system is not one: "
                            "pick a block inside it, or the block it drives)")
-    if node["kind"] in ("output", "assertion", "target"):
+    if node["kind"] in ("output", "assertion", "target", "assumption"):
         return _source(nodes, into, node, "in")
     return (decision, _primary(node))
 
@@ -660,7 +664,7 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
         kind = node["kind"]
         if kind == "latch":
             return ["init", "next"]
-        if kind in ("output", "assertion", "target", "via"):
+        if kind in ("output", "assertion", "target", "assumption", "via"):
             return ["in"]
         if kind == "component":
             return [pin["port"] for pin in self._spec(node)["inputs"]]
@@ -854,6 +858,9 @@ class _Builder:  # pylint: disable=too-few-public-methods,too-many-instance-attr
             self.ctx.mk_output(self._input(node, "in"), node.get("name"))
         elif kind in ("assertion", "target"):
             self.properties.append((node, self._input(node, "in")))
+        elif kind == "assumption":
+            # every engine (and the portfolio's processes, through the recipe) keeps to it
+            self.ctx.push_assumption(self._input(node, "in"))
         if node.get("output") and kind not in ("output", "via"):
             self.ctx.mk_output(self.outputs[(node["id"], 0)], node.get("name"))
 

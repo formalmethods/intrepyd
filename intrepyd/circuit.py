@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from intrepyd.context import Context
 
 
-class Circuit:
+class Circuit:  # pylint: disable=too-many-instance-attributes
     """
     Abstract interface for a circuit.
     """
@@ -23,6 +23,10 @@ class Circuit:
         self.inputs: dict[str, Net] = {}
         self.outputs: dict[str, Net] = {}
         self.targets: dict[str, Net] = {}
+        # what a translated model checks and assumes (a Lustre model's
+        # properties and assertions), by name
+        self.properties: dict[str, Net] = {}
+        self.assumptions: dict[str, Net] = {}
 
     def mk_circuit(self, put_namespace: bool = False) -> None:
         """

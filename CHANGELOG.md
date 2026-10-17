@@ -4,6 +4,30 @@ The changes of each release of intrepyd. A release is made from the section
 whose heading is the version in `VERSION`: `make release` refuses without
 one, and the section becomes the notes of the GitHub release.
 
+## 0.28.0
+
+- **Lustre models opened as circuits.** `python -m intrepyd.export model.lus
+  [--node TOP] --int TYPE --real TYPE` writes the circuit of a Lustre model's
+  top node as a netlist, which the circuit editors open; `--describe` says the
+  file's nodes, its top one, and whether it uses `int` and `real`, whose
+  encodings are to be chosen (none is chosen silently). The netlist, version
+  3 when it has them, has `assertion` nodes (the properties) and `assumption`
+  nodes (the assertions), and a `scope` per net (the node instance it is
+  part of).
+- **The Lustre front end**: `assert` is translated, as an assumption every
+  engine keeps to (`push_assumption`); the properties are kept in the
+  translated circuit (`circuit.properties`, by name), and the assertions too
+  (`circuit.assumptions`). A syntax error, a construct not translated, and
+  Kind2's contracts are refused with `LustreError`, its line and column, where
+  a syntax error was printed and went on, and constants and type definitions
+  were skipped. Every output of the top node is in `circuit.outputs` (only
+  the first was, under each name).
+- **Assumption blocks** in a diagram (`"kind": "assumption"`): a condition
+  the inputs keep to at every step, which verifying and the MC/DC tests
+  consider.
+- The exported names: a made-up name inside a namespace (`sat.1.__n14`) is
+  left out, as one outside is; an input's or a latch's name is kept.
+
 ## 0.27.0
 
 - The first valid license is used. A license that is not valid (one for

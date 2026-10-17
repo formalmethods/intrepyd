@@ -4,11 +4,12 @@ This module implements infrastructure to store nodes
 
 from intrepyd.visitable import Visitable
 from intrepyd.lustre2py.expression import Expression
+from intrepyd.lustre2py.instruction import push_pre
 
 _GREY = 1
 _BLACK = 2
 
-class Node(Visitable):
+class Node(Visitable):  # pylint: disable=too-many-instance-attributes
     """
     Stores a node
     """
@@ -20,6 +21,9 @@ class Node(Visitable):
         self._equations = []
         self._main = False
         self._properties = []
+        self._property_labels = []
+        self._assertions = []
+        self._assertion_labels = []
 
     @property
     def name(self):
@@ -70,6 +74,27 @@ class Node(Visitable):
         """
         return self._properties
 
+    @property
+    def property_labels(self):
+        """
+        The names of the properties, in their order
+        """
+        return self._property_labels
+
+    @property
+    def assertions(self):
+        """
+        The assertions (assert e;): assumptions on the node's environment
+        """
+        return self._assertions
+
+    @property
+    def assertion_labels(self):
+        """
+        The names of the assertions, in their order
+        """
+        return self._assertion_labels
+
     @name.setter
     def name(self, value):
         self._name = value
@@ -102,11 +127,19 @@ class Node(Visitable):
         """
         self._equations.append(equation)
 
-    def add_property(self, prop):
+    def add_property(self, prop, label=None):
         """
         Adds a property declaration
         """
         self._properties.append(prop)
+        self._property_labels.append(label or f'property{len(self._properties)}')
+
+    def add_assertion(self, expr, label=None):
+        """
+        Adds an assertion (assert e;)
+        """
+        self._assertions.append(expr)
+        self._assertion_labels.append(label or f'assumption{len(self._assertions)}')
 
     def sort_equations(self):
         """
@@ -125,6 +158,8 @@ class Node(Visitable):
         """
         for equat in self._equations:
             equat.push_pre()
+        self._properties = [push_pre(prop) for prop in self._properties]
+        self._assertions = [push_pre(expr) for expr in self._assertions]
 
 
 class EquationTopology:

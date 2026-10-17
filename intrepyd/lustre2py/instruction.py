@@ -113,3 +113,10 @@ def _expression_pre_pusher(expr, num_pre):
         new_exprs = [_expression_pre_pusher(expression, num_pre) for expression in expr.expressions]
         return TupleExpression(new_exprs)
     raise TypeError('Unhandled kind' + expr.kind)
+
+
+def push_pre(expr):
+    """
+    An expression with its 'pre' operators pushed to its variables
+    """
+    return _expression_pre_pusher(expr, 0)
